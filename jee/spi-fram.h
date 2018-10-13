@@ -2,8 +2,7 @@
 // see https://jeelabs.org/ref/MB85RS2MTA.pdf
 
 template< typename SPI >
-class Fram {
-public:
+struct Fram {
     static void init () {
 		SPI::init();
 		SPI::enable();
