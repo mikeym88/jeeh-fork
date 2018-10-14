@@ -173,8 +173,9 @@ class I2cBus {
     static void sclHi () {
         scl = 1;
         hold();
-        while (!scl)
-            ;
+        for (int i = 0; i < 10000; ++i)
+            if (scl)
+                break;
     }
 
 public:
