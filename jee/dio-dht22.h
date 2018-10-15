@@ -11,7 +11,7 @@ struct DHT22 {
 
     static bool read (int16_t& t, int16_t& h) {
         DAT::write(0);
-        wait_ms(2);    // trigger a readout
+        wait_ms(18);    // trigger a readout
         DAT::write(1);
 
         bool ok = wait(0) & wait(1) & wait(0);  // expect an ack pulse
