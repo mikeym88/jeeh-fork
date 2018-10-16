@@ -23,7 +23,7 @@ struct DHT22 {
                 ok &= wait(1);
                 uint32_t t = clock.micros();
                 ok &= wait(0);
-                if (clock.micros() - t > 40)
+                if (clock.micros() - t >= 50)
                     buf[i] |= 1;
             }
 
