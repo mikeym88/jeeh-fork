@@ -137,7 +137,7 @@ struct UartDev {
     constexpr static uint32_t brr = base + 0x08;
     constexpr static uint32_t cr1 = base + 0x0C;
 
-    UartDev () {
+    static void init () {
         tx.mode(Pinmode::alt_out, 7);
         rx.mode(Pinmode::in_pullup, 7);
 
@@ -254,12 +254,11 @@ template< typename TX, typename RX, int N >
 RingBuffer<N> UartBufDev<TX,RX,N>::xmit;
 
 // system clock
-// FIXME - appears to be a bit erratic on F407VE eBay board (h/w or s/w issue?)
 
-static void enableClkAt168mhz () {
-    constexpr uint32_t rcc   = Periph::rcc;
+static void enableClkAt168MHz () {
+    constexpr uint32_t rcc = Periph::rcc;
 
-    MMIO32(Periph::flash + 0x00) = 0x103; // flash acr, 3 wait states
+    MMIO32(Periph::flash + 0x00) = 0x705; // flash acr, 5 wait states
     MMIO32(rcc + 0x00) = (1<<16); // HSEON
     while ((MMIO32(rcc + 0x00) & (1<<17)) == 0) ; // wait for HSERDY
     MMIO32(rcc + 0x08) = 1; // switch to HSE
@@ -271,7 +270,7 @@ static void enableClkAt168mhz () {
 
 static int fullSpeedClock () {
     constexpr uint32_t hz = 168000000;
-    enableClkAt168mhz();                 // using external 8 MHz crystal
+    enableClkAt168MHz();                 // using external 8 MHz crystal
     enableSysTick(hz/1000);              // systick once every 1 ms
     MMIO32(0x40011008) = (hz/2)/115200;  // usart1: 115200 baud @ 84 MHz
     return hz;
