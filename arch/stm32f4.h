@@ -124,13 +124,17 @@ struct Pin {
 template< typename TX, typename RX >
 struct UartDev {
     // TODO does not recognise alternate TX pins
-    constexpr static int uidx = TX::id ==  9 ? 0 :  // PA9, USART1
-                                TX::id ==  2 ? 1 :  // PA2, USART2
+    constexpr static int uidx = TX::id ==  2 ? 1 :  // PA2, USART2
+								TX::id ==  9 ? 0 :  // PA9, USART1
+                                TX::id == 22 ? 0 :  // PB6, USART1
                                 TX::id == 26 ? 2 :  // PB10, USART3
-                                TX::id == 42 ? 3 :  // PC10, UART4
-                                TX::id == 44 ? 4 :  // PC12, UART5
+                                TX::id == 42 ? 2 :  // PC10, USART3
+                                TX::id == 53 ? 1 :  // PD5, USART2
+                                TX::id == 56 ? 2 :  // PD8, USART3
+                                // TODO more possible, using alt mode 8 iso 7
                                                0;   // else USART1
-    constexpr static uint32_t base = uidx == 0 ? 0x40011000 :
+    constexpr static uint32_t base = uidx == 0 ? 0x40011000 : // USART1
+								     uidx == 5 ? 0x40011400 : // USART6
                                                  0x40004000 + 0x400 * uidx;
     constexpr static uint32_t sr  = base + 0x00;
     constexpr static uint32_t dr  = base + 0x04;
@@ -256,16 +260,14 @@ RingBuffer<N> UartBufDev<TX,RX,N>::xmit;
 // system clock
 
 static void enableClkAt168MHz () {
-    constexpr uint32_t rcc = Periph::rcc;
-
     MMIO32(Periph::flash + 0x00) = 0x705; // flash acr, 5 wait states
-    MMIO32(rcc + 0x00) = (1<<16); // HSEON
-    while ((MMIO32(rcc + 0x00) & (1<<17)) == 0) ; // wait for HSERDY
-    MMIO32(rcc + 0x08) = (4<<13) | (5<<10) | (1<<0); // prescalers and use HSE
-    MMIO32(rcc + 0x04) = (7<<24) | (1<<22) | (0<<16) | (168<<6) | (4<<0);
-    MMIO32(rcc + 0x00) |= (1<<24); // PLLON
-    while ((MMIO32(rcc + 0x00) & (1<<25)) == 0) ; // wait for PLLRDY
-    MMIO32(rcc + 0x08) = (4<<13) | (5<<10) | (2<<0);
+    MMIO32(Periph::rcc + 0x00) = (1<<16); // HSEON
+    while ((MMIO32(Periph::rcc + 0x00) & (1<<17)) == 0) ; // wait for HSERDY
+    MMIO32(Periph::rcc + 0x08) = (4<<13) | (5<<10) | (1<<0); // prescaler w/ HSE
+    MMIO32(Periph::rcc + 0x04) = (7<<24) | (1<<22) | (0<<16) | (168<<6) | (4<<0);
+    MMIO32(Periph::rcc + 0x00) |= (1<<24); // PLLON
+    while ((MMIO32(Periph::rcc + 0x00) & (1<<25)) == 0) ; // wait for PLLRDY
+    MMIO32(Periph::rcc + 0x08) = (4<<13) | (5<<10) | (2<<0);
 }
 
 static int fullSpeedClock () {
