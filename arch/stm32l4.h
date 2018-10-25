@@ -265,13 +265,10 @@ static void enableClkAt80MHz () {
     MMIO32(Periph::flash + 0x00) = 0x704; // flash acr, 4 wait states
     MMIO32(Periph::rcc + 0x00) = (1<<8); // HSION
     while ((MMIO32(Periph::rcc + 0x00) & (1<<10)) == 0) ; // wait for HSIRDY
-MMIO32(Periph::rcc + 0x08) = (1<<0); // select HSI
-return;
-    MMIO32(Periph::rcc + 0x08) = (4<<13) | (5<<10) | (1<<0); // prescaler w/ HSE
-    MMIO32(Periph::rcc + 0x04) = (7<<24) | (1<<22) | (0<<16) | (168<<6) | (4<<0);
+    MMIO32(Periph::rcc + 0x0C) = (1<<24) | (10<<8) | (2<<0); // 160 MHz w/ HSI
     MMIO32(Periph::rcc + 0x00) |= (1<<24); // PLLON
     while ((MMIO32(Periph::rcc + 0x00) & (1<<25)) == 0) ; // wait for PLLRDY
-    MMIO32(Periph::rcc + 0x08) = (4<<13) | (5<<10) | (2<<0);
+	MMIO32(Periph::rcc + 0x08) = (3<<0); // select PLL as SYSCLK, 80 MHz
 }
 
 static int fullSpeedClock () {
