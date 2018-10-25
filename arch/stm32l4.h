@@ -1,6 +1,7 @@
 struct Periph {
-    constexpr static uint32_t gpio = 0x48000000U;
-    constexpr static uint32_t rcc  = 0x40021000U;
+    constexpr static uint32_t gpio  = 0x48000000;
+    constexpr static uint32_t rcc   = 0x40021000;
+    constexpr static uint32_t flash = 0x40022000;
 };
 
 // interrupt vector table in ram
@@ -257,3 +258,26 @@ RingBuffer<N> UartBufDev<TX,RX,N>::recv;
 
 template< typename TX, typename RX, int N >
 RingBuffer<N> UartBufDev<TX,RX,N>::xmit;
+
+// system clock
+
+static void enableClkAt80MHz () {
+    MMIO32(Periph::flash + 0x00) = 0x704; // flash acr, 4 wait states
+    MMIO32(Periph::rcc + 0x00) = (1<<8); // HSION
+    while ((MMIO32(Periph::rcc + 0x00) & (1<<10)) == 0) ; // wait for HSIRDY
+MMIO32(Periph::rcc + 0x08) = (1<<0); // select HSI
+return;
+    MMIO32(Periph::rcc + 0x08) = (4<<13) | (5<<10) | (1<<0); // prescaler w/ HSE
+    MMIO32(Periph::rcc + 0x04) = (7<<24) | (1<<22) | (0<<16) | (168<<6) | (4<<0);
+    MMIO32(Periph::rcc + 0x00) |= (1<<24); // PLLON
+    while ((MMIO32(Periph::rcc + 0x00) & (1<<25)) == 0) ; // wait for PLLRDY
+    MMIO32(Periph::rcc + 0x08) = (4<<13) | (5<<10) | (2<<0);
+}
+
+static int fullSpeedClock () {
+    constexpr uint32_t hz = 80000000;
+    enableClkAt80MHz();              // using internal 16 MHz HSI
+    enableSysTick(hz/1000);          // systick once every 1 ms
+    MMIO32(0x40011008) = hz/115200;  // usart1: 115200 baud @ 80 MHz
+    return hz;
+}
