@@ -1,5 +1,10 @@
+// Hardware access for STM32F103 family microcontrollers
+// see [1] https://jeelabs.org/ref/STM32F4-RM0090.pdf
+
 struct Periph {
     constexpr static uint32_t fsmc  = 0x40000000;
+    constexpr static uint32_t rtc   = 0x40002800;
+    constexpr static uint32_t pwr   = 0x40007000;
     constexpr static uint32_t gpio  = 0x40020000;
     constexpr static uint32_t rcc   = 0x40023800;
     constexpr static uint32_t flash = 0x40023C00;
@@ -353,5 +358,82 @@ struct CanDev {
             MMIO32(rfr) |= (1<<5); // RFOM
         }
         return len;
+    }
+};
+
+// real-time clock
+
+struct RTC {  // [1] pp.486
+    constexpr static uint32_t bdcr = Periph::rcc + 0x70;
+    constexpr static uint32_t tr   = Periph::rtc + 0x00;
+    constexpr static uint32_t dr   = Periph::rtc + 0x04;
+    constexpr static uint32_t cr   = Periph::rtc + 0x08;
+    constexpr static uint32_t isr  = Periph::rtc + 0x0C;
+    constexpr static uint32_t wpr  = Periph::rtc + 0x24;
+    constexpr static uint32_t bkpr = Periph::rtc + 0x50;
+
+    struct DateTime {
+        uint32_t yr :6;
+        uint32_t mo :4;
+        uint32_t dy :5;
+        uint32_t hh :5;
+        uint32_t mm :6;
+        uint32_t ss :6;
+    };
+
+    RTC () {
+        MMIO32(Periph::rcc + 0x40) |= (1<<28);  // enable PWREN
+        MMIO32(Periph::pwr) |= (1<<8);  // set DBP [1] p.481
+        MMIO32(wpr) = 0xCA;  // disable write protection, [1] p.803
+        MMIO32(wpr) = 0x53;
+    }
+
+    void init () {
+        MMIO32(bdcr) |= (1<<0);                 // LSEON backup domain
+        while ((MMIO32(bdcr) & (1<<1)) == 0) {} // wait for LSERDY
+        MMIO32(bdcr) |= (1<<8);                 // RTSEL = LSE
+        MMIO32(bdcr) |= (1<<15);                // RTCEN
+        MMIO32(cr) |= (1<<5);                   // BYPSHAD
+    }
+
+    DateTime get () {
+        while (true) {
+            uint32_t tod = MMIO32(tr);
+            uint32_t doy = MMIO32(dr);
+            if (tod == MMIO32(tr)) {
+                DateTime dt;
+                dt.ss = (tod & 0xF) + 10 * ((tod>>4) & 0x7);
+                dt.mm = ((tod>>8) & 0xF) + 10 * ((tod>>12) & 0x7);
+                dt.hh = ((tod>>16) & 0xF) + 10 * ((tod>>20) & 0x3);
+                dt.dy = (doy & 0xF) + 10 * ((doy>>4) & 0x3);
+                dt.mo = ((doy>>8) & 0xF) + 10 * ((doy>>12) & 0x1);
+                // works until end 2063, will fail (i.e. roll over) in 2064 !
+                dt.yr = ((doy>>16) & 0xF) + 10 * ((doy>>20) & 0xF);
+                return dt;
+            }
+            // if time of day changed, try again
+        }
+    }
+
+    void set (DateTime dt) {
+        MMIO32(isr) |= (1<<7);                  // set INIT
+        while ((MMIO32(isr) & (1<<6)) == 0) {}  // wait for INITF
+        MMIO32(tr) = (dt.ss + 6 * (dt.ss/10)) |
+                    ((dt.mm + 6 * (dt.mm/10)) << 8) |
+                    ((dt.hh + 6 * (dt.hh/10)) << 16);
+        MMIO32(dr) = (dt.dy + 6 * (dt.dy/10)) |
+                    ((dt.mo + 6 * (dt.mo/10)) << 8) |
+                    ((dt.yr + 6 * (dt.yr/10)) << 16);
+        MMIO32(isr) &= ~(1<<7);                 // clear INIT
+    }
+
+    // access to the backup registers
+
+    uint32_t getData (int reg) {
+        return MMIO32(bkpr + 4 * reg);  // regs 0..18
+    }
+
+    void setData (int reg, uint32_t val) {
+        MMIO32(bkpr + 4 * reg) = val;  // regs 0..18
     }
 };
