@@ -148,7 +148,7 @@ struct UartDev {
 
     static void init () {
         tx.mode(Pinmode::alt_out, 7);
-        rx.mode(Pinmode::in_pullup, 7);
+        rx.mode(Pinmode::alt_out, 7);
 
         if (uidx == 0)
             MMIO32(Periph::rcc + 0x44) |= 1 << 4; // enable USART1 clock
@@ -164,7 +164,7 @@ struct UartDev {
     }
 
     static bool writable () {
-        return (MMIO32(sr) & 0x80) != 0;  // TXE
+        return (MMIO32(sr) & (1<<7)) != 0;  // TXE
     }
 
     static void putc (int c) {
@@ -174,7 +174,7 @@ struct UartDev {
     }
 
     static bool readable () {
-        return (MMIO32(sr) & 0x24) != 0;  // RXNE or ORE
+        return (MMIO32(sr) & ((1<<5) | (1<<3))) != 0;  // RXNE or ORE
     }
 
     static int getc () {
