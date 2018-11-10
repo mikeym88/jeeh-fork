@@ -469,7 +469,7 @@ struct Flash {
                      (uint32_t) addr < 0x20000 ? ((int) addr >> 16) + 3 :
                                                  ((int) addr >> 17) + 4;
         unlock();
-        MMIO32(cr) = (1<<16) | (sector<<3) | (1<<1); // STRT, SNB, SER
+        MMIO32(cr) = (1<<16) | (2<<8) | (sector<<3) | (1<<1); // STRT PG SNB SER
         finish();
     }
 
