@@ -437,3 +437,49 @@ struct RTC {  // [1] pp.486
         MMIO32(bkpr + 4 * reg) = val;  // regs 0..18
     }
 };
+
+// flash memory writing and erasing
+
+struct Flash {
+    constexpr static uint32_t keyr = Periph::flash + 0x04;
+    constexpr static uint32_t sr   = Periph::flash + 0x0C;
+    constexpr static uint32_t cr   = Periph::flash + 0x10;
+
+    static void write16 (void const* addr, uint16_t val) {
+        if (*(uint16_t const*) addr != 0xFFFF)
+            return;
+        unlock();
+        MMIO32(cr) = 0x01;
+        MMIO16(addr) = val;
+        finish();
+    }
+
+    static void write32 (void const* addr, uint32_t val) {
+        if (*(uint32_t const*) addr != 0xFFFFFFFF)
+            return;
+        unlock();
+        MMIO32(cr) = (2<<8) | (1<<0); // PSIZE, PG
+        MMIO32((uint32_t) addr | 0x08000000) = val;
+        finish();
+    }
+
+    static void erasePage (void const* addr) {
+        // sectors are 16/16/16/16/64/128... KB
+        int sector = (uint32_t) addr < 0x10000 ? ((int) addr >> 14) :
+                     (uint32_t) addr < 0x20000 ? ((int) addr >> 16) + 3 :
+                                                 ((int) addr >> 17) + 4;
+        unlock();
+        MMIO32(cr) = (1<<16) | (sector<<3) | (1<<1); // STRT, SNB, SER
+        finish();
+    }
+
+    static void unlock () {
+        MMIO32(keyr) = 0x45670123;
+        MMIO32(keyr) = 0xCDEF89AB;
+    }
+
+    static void finish () {
+        while (MMIO32(sr) & (1<<16)) {}
+        MMIO32(cr) = (1<<31); // LOCK
+    }
+};
