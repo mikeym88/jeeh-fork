@@ -200,7 +200,7 @@ struct FileMap {
         uint16_t grp = num / fat.spc;
         if (grp >= N || map[grp] == 0)
             return false;
-        uint16_t off = map[grp] + num % fat.spc;
+        uint16_t off = fat.data + (map[grp] - 2) * fat.spc + num % fat.spc;
         //printf("readSect(%d) => %d\n", num, off);
         T::store::read512(off, buf);
         return true;
@@ -210,7 +210,7 @@ struct FileMap {
         uint16_t grp = num / fat.spc;
         if (grp >= N || map[grp] == 0)
             return false;
-        uint16_t off = map[grp] + num % fat.spc;
+        uint16_t off = fat.data + (map[grp] - 2) * fat.spc + num % fat.spc;
         //printf("writeSect(%d) => %d\n", num, off);
         T::store::write512(off, buf);
         return true;
