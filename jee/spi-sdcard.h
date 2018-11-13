@@ -126,7 +126,6 @@ struct FatFS {
             return false;
         // is the FAT entry in our buffer?
         return (clim < 4096 ? cn/2*3 : cn*2) < (int) sizeof fat;
-
     }
 
     // TODO use buf[] to read on-demand if fat sector is not in memory
@@ -142,6 +141,7 @@ struct FatFS {
                       : fat[o] | (fat[o+1]&0xF)<<8;
     }
 
+#if 0
     void dumpHex (int max =512) {
         for (int i = 0; i < max; i += 16) {
             printf("%3d:", i);
@@ -150,6 +150,7 @@ struct FatFS {
             printf("\n");
         }
     }
+#endif
 
     uint32_t base;          // base sector for everything
     uint32_t rdir;          // location of root dir
@@ -170,25 +171,28 @@ struct FileMap {
     }
 
     int open (char const name [11]) {
-        T::store::read512(fat.rdir, fat.buf);
-        for (int i = 0; i < 512; i += 32)
-            if (memcmp(name, fat.buf + i, 11) == 0) {
-                int cluster = *(uint16_t*) (fat.buf + i + 26);
-                int length = *(uint32_t*) (fat.buf + i + 28);
-                for (int j = 0; j < 11; ++j) {
-                    if (j == 8)
-                        printf(".");
-                    printf("%c", name[j]);
-                }
+        for (int i = 0; i < fat.rmax; ++i) {
+            int off = (i*32) % 512;
+            if (off == 0)
+                T::store::read512(fat.rdir + i/16, fat.buf);
+            if (memcmp(name, fat.buf + off, 11) == 0) {
+                int cluster = *(uint16_t*) (fat.buf + off + 26);
+                int length = *(uint32_t*) (fat.buf + off + 28);
+                //for (int j = 0; j < 11; ++j) {
+                //    if (j == 8)
+                //        printf(".");
+                //    printf("%c", name[j]);
+                //}
                 int n = 0;
                 while (2 <= cluster && cluster < fat.clim && n < N) {
-                    // printf("%d,", cluster);
+                    //printf("%d,", cluster);
                     map[n++] = cluster;
                     cluster = fat.chain(cluster);
                 }
-                printf(" %d @ %d, %db\n", n, cluster, length);
+                //printf(" %d @ %d, %db\n", n, cluster, length);
                 return length;
             }
+        }
         return -1;
     }
 
@@ -197,7 +201,7 @@ struct FileMap {
         if (grp >= N || map[grp] == 0)
             return false;
         uint16_t off = map[grp] + num % fat.spc;
-        printf("readSect(%d) => %d\n", num, off);
+        //printf("readSect(%d) => %d\n", num, off);
         T::store::read512(off, buf);
         return true;
     }
@@ -207,7 +211,7 @@ struct FileMap {
         if (grp >= N || map[grp] == 0)
             return false;
         uint16_t off = map[grp] + num % fat.spc;
-        printf("writeSect(%d) => %d\n", num, off);
+        //printf("writeSect(%d) => %d\n", num, off);
         T::store::write512(off, buf);
         return true;
     }
