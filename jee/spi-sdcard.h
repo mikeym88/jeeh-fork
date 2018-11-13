@@ -47,7 +47,7 @@ struct SdCard {
         wait();
     }
 
-    static void write512 (int page, uint8_t const* buf) {
+    static void write512 (int page, void const* buf) {
         cmd(24, sdhc ? page : page << 9);
         send16b(0xFFFE);
         for (int i = 0; i < 512; ++i)
@@ -204,23 +204,16 @@ struct FileMap {
         return -1;
     }
 
-    bool readSect (int num, void* buf) {
+    bool ioSect (bool wr, int num, void* buf) {
         uint16_t grp = num / fat.spc;
         if (grp >= N || map[grp] == 0)
             return false;
         uint16_t off = fat.data + (map[grp] - 2) * fat.spc + num % fat.spc;
-        //printf("readSect(%d) => %d\n", num, off);
-        T::store::read512(off, buf);
-        return true;
-    }
-
-    bool writeSect (int num, uint8_t const* buf) {
-        uint16_t grp = num / fat.spc;
-        if (grp >= N || map[grp] == 0)
-            return false;
-        uint16_t off = fat.data + (map[grp] - 2) * fat.spc + num % fat.spc;
-        //printf("writeSect(%d) => %d\n", num, off);
-        T::store::write512(off, buf);
+        //printf("rwSect(%d,%d) => %d\n", wr, num, off);
+        if (wr)
+            T::store::write512(off, buf);
+        else
+            T::store::read512(off, buf);
         return true;
     }
 
