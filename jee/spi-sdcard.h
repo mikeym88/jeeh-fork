@@ -92,7 +92,7 @@ struct SdCard {
 template< typename SPI >
 uint8_t SdCard<SPI>::sdhc;
 
-template< typename T, int N =0 >
+template< typename T >
 struct FatFS {
     typedef T store;
 
@@ -117,28 +117,35 @@ struct FatFS {
                " rdir %d rmax %d data %d tsc %d clim %d\n",
             base, spc, rsec, nfc, spf, rdir, rmax, data, tsc, clim);
 #endif
-        for (int i = 0; i < N; ++i)
-            T::read512(base + rsec + i, fat + 512*i);
-    }
-
-    bool valid (int cn) {
-        if (cn < 2 || cn >= clim)
-            return false;
-        // is the FAT entry in our buffer?
-        return (clim < 4096 ? cn/2*3 : cn*2) < (int) sizeof fat;
     }
 
     // TODO use buf[] to read on-demand if fat sector is not in memory
     int chain (int cn) {
-        if (!valid(cn))
+        if (cn < 2 || cn >= clim)
             return 0;
 
-        if (clim >= 4096)  // is it FAT16?
-            return ((uint16_t*) fat)[cn];
+        int off = clim < 4096 ? cn/2*3 : cn*2;  // 12 or 16 bits per entry
+        if (curr != off/512) {
+            curr = off/512;
+            T::read512(base + rsec + curr, buf);
+        }
 
-        int o = cn/2*3;  // else 2 entries per 3 bytes
-        return cn & 1 ? fat[o+1]>>4 | fat[o+2]<<4
-                      : fat[o] | (fat[o+1]&0xF)<<8;
+        if (clim >= 4096)  // is it FAT16?
+            return *(uint16_t*) (buf + off % 512);
+
+        // TODO untested:
+        // 12-bit entries needs special care, as they may span across sectors
+
+        if (cn & 1)
+            ++off;
+
+        uint8_t b1 = buf[off];
+        off = (off+1) % 512;
+        if (off == 0)
+            T::read512(base + rsec + ++curr, buf);
+        uint8_t b2 = buf[off];
+
+        return cn & 1 ? b1>>4 | b2<<4 : b1 | (b2&0xF)<<8;
     }
 
 #if 0
@@ -160,8 +167,8 @@ struct FatFS {
     uint16_t clim;          // cluster limit
     uint8_t spc;            // sectors per cluster
 
+    uint16_t curr;          // current sector in buffer (during chain calls)
     uint8_t buf [512];      // buffer space for one sector
-    uint8_t fat [N*512+1];  // in-mem copy of FAT, else a dummy byte
 };
 
 template< typename T, int N >
@@ -183,8 +190,9 @@ struct FileMap {
                 //        printf(".");
                 //    printf("%c", name[j]);
                 //}
+                fat.curr = ~0; // consider buf to be empty at this point
                 int n = 0;
-                while (2 <= cluster && cluster < fat.clim && n < N) {
+                while (2 <= cluster && cluster < fat.clim) {
                     //printf("%d,", cluster);
                     map[n++] = cluster;
                     cluster = fat.chain(cluster);
