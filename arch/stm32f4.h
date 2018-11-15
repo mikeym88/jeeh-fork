@@ -2,12 +2,12 @@
 // see [1] https://jeelabs.org/ref/STM32F4-RM0090.pdf
 
 struct Periph {
-    constexpr static uint32_t fsmc  = 0x40000000;
     constexpr static uint32_t rtc   = 0x40002800;
     constexpr static uint32_t pwr   = 0x40007000;
     constexpr static uint32_t gpio  = 0x40020000;
     constexpr static uint32_t rcc   = 0x40023800;
     constexpr static uint32_t flash = 0x40023C00;
+    constexpr static uint32_t fsmc  = 0xA0000000;
 };
 
 // interrupt vector table in ram
