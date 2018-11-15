@@ -193,7 +193,7 @@ TX UartDev<TX,RX>::tx;
 template< typename TX, typename RX >
 RX UartDev<TX,RX>::rx;
 
-// interrupt-enabled uart, sits of top of polled uart
+// interrupt-enabled uart, sits on top of polled uart
 
 template< typename TX, typename RX, int N =50 >
 struct UartBufDev : UartDev<TX,RX> {
