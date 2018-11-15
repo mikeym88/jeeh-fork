@@ -373,19 +373,17 @@ struct RTC {  // [1] pp.486
     constexpr static uint32_t bkpr = Periph::rtc + 0x50;
 
     struct DateTime {
-        uint32_t yr :6;
-        uint32_t mo :4;
-        uint32_t dy :5;
-        uint32_t hh :5;
-        uint32_t mm :6;
-        uint32_t ss :6;
+        uint32_t yr :6;  // 00..63
+        uint32_t mo :4;  // 1..12
+        uint32_t dy :5;  // 1..31
+        uint32_t hh :5;  // 0..23
+        uint32_t mm :6;  // 0..59
+        uint32_t ss :6;  // 0..59
     };
 
     RTC () {
         MMIO32(Periph::rcc + 0x40) |= (1<<28);  // enable PWREN
         MMIO32(Periph::pwr) |= (1<<8);  // set DBP [1] p.481
-        MMIO32(wpr) = 0xCA;  // disable write protection, [1] p.803
-        MMIO32(wpr) = 0x53;
     }
 
     void init () {
@@ -393,29 +391,36 @@ struct RTC {  // [1] pp.486
         while ((MMIO32(bdcr) & (1<<1)) == 0) {} // wait for LSERDY
         MMIO32(bdcr) |= (1<<8);                 // RTSEL = LSE
         MMIO32(bdcr) |= (1<<15);                // RTCEN
-        MMIO32(cr) |= (1<<5);                   // BYPSHAD
     }
 
     DateTime get () {
-        while (true) {
-            uint32_t tod = MMIO32(tr);
-            uint32_t doy = MMIO32(dr);
-            if (tod == MMIO32(tr)) {
-                DateTime dt;
-                dt.ss = (tod & 0xF) + 10 * ((tod>>4) & 0x7);
-                dt.mm = ((tod>>8) & 0xF) + 10 * ((tod>>12) & 0x7);
-                dt.hh = ((tod>>16) & 0xF) + 10 * ((tod>>20) & 0x3);
-                dt.dy = (doy & 0xF) + 10 * ((doy>>4) & 0x3);
-                dt.mo = ((doy>>8) & 0xF) + 10 * ((doy>>12) & 0x1);
-                // works until end 2063, will fail (i.e. roll over) in 2064 !
-                dt.yr = ((doy>>16) & 0xF) + 10 * ((doy>>20) & 0xF);
-                return dt;
-            }
-            // if time of day changed, try again
-        }
+        MMIO32(wpr) = 0xCA;  // disable write protection, [1] p.803
+        MMIO32(wpr) = 0x53;
+
+        MMIO32(isr) &= ~(1<<5);                 // clear RSF
+        while ((MMIO32(isr) & (1<<5)) == 0) {}  // wait for RSF
+
+        MMIO32(wpr) = 0xFF;  // re-enable write protection
+
+        // shadow registers are now valid and won't change while being read
+        uint32_t tod = MMIO32(tr);
+        uint32_t doy = MMIO32(dr);
+
+        DateTime dt;
+        dt.ss = (tod & 0xF) + 10 * ((tod>>4) & 0x7);
+        dt.mm = ((tod>>8) & 0xF) + 10 * ((tod>>12) & 0x7);
+        dt.hh = ((tod>>16) & 0xF) + 10 * ((tod>>20) & 0x3);
+        dt.dy = (doy & 0xF) + 10 * ((doy>>4) & 0x3);
+        dt.mo = ((doy>>8) & 0xF) + 10 * ((doy>>12) & 0x1);
+        // works until end 2063, will fail (i.e. roll over) in 2064 !
+        dt.yr = ((doy>>16) & 0xF) + 10 * ((doy>>20) & 0x7);
+        return dt;
     }
 
     void set (DateTime dt) {
+        MMIO32(wpr) = 0xCA;  // disable write protection, [1] p.803
+        MMIO32(wpr) = 0x53;
+
         MMIO32(isr) |= (1<<7);                  // set INIT
         while ((MMIO32(isr) & (1<<6)) == 0) {}  // wait for INITF
         MMIO32(tr) = (dt.ss + 6 * (dt.ss/10)) |
@@ -425,6 +430,8 @@ struct RTC {  // [1] pp.486
                     ((dt.mo + 6 * (dt.mo/10)) << 8) |
                     ((dt.yr + 6 * (dt.yr/10)) << 16);
         MMIO32(isr) &= ~(1<<7);                 // clear INIT
+
+        MMIO32(wpr) = 0xFF;  // re-enable write protection
     }
 
     // access to the backup registers
