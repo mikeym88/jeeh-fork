@@ -1,7 +1,7 @@
 // Driver for an ILI9341-based 320x240 LCD TFT display, using 16b-mode FSMC
 // see https://jeelabs.org/ref/ILI9341.pdf
 
-template< uint32_t REG, uint32_t DAT >
+template< uint32_t ADDR >
 struct ILI9341 {
     constexpr static int width = 240;
     constexpr static int height = 320;
@@ -10,6 +10,19 @@ struct ILI9341 {
         static uint8_t const config [] = {
             // cmd, count, data bytes ...
 #if 1
+           0x3A, 1, 0x55, // pxiel format 16b
+           0x36, 1, 0xB8, // orientation, bits 7..4 = MY MX MV ML
+           0x11, 0,       // sleep off
+#elif 0
+            0xB1, 2, 0x00, 0x18,                     // FRMCTR1
+            0xB6, 3, 0x08, 0x82, 0x27,               // DFUNCTR
+            0xF2, 1, 0x00,
+            0x26, 1, 0x01,                           // GAMMASET
+            0xE0, 15, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1,
+                      0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00,  // GMCTRP1
+            0xE1, 15, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1,
+                      0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F,  // GMCTRN1
+#elif 0
             0xEF, 3, 0x03, 0x80, 0x02,               // ??
             0xCF, 3, 0x00, 0xC1, 0x30,               // power control B
             0xED, 4, 0x64, 0x03, 0x12, 0x81,         // power on sequence ctrl
@@ -78,10 +91,14 @@ struct ILI9341 {
 
 #if 1
         for (uint8_t const* p = config; p < config + sizeof config; ++p) {
-            cmd(*p);
-            int n = *++p;
-            while (--n >= 0)
-                out16(*++p);
+            if (*p == 0xFF)
+                wait_ms(*++p);
+            else {
+                cmd(*p);
+                int n = *++p;
+                while (--n >= 0)
+                    out16(*++p);
+            }
         }
 #endif
 
@@ -90,20 +107,24 @@ struct ILI9341 {
     }
 
     static void cmd (int v) {
-        MMIO16(REG) = v;
+        MMIO16(ADDR-2) = v;
     }
 
     static void out16 (int v) {
-        MMIO16(DAT) = v;
+        MMIO16(ADDR) = v;
     }
 
     static void pixel (int x, int y, uint16_t rgb) {
         cmd(0x2A);
+        out16(y>>8);
         out16(y);
+        out16(yEnd>>8);
         out16(yEnd);
 
         cmd(0x2B);
+        out16(x>>8);
         out16(x);
+        out16(xEnd>>8);
         out16(xEnd);
 
         cmd(0x2C);
@@ -137,14 +158,15 @@ struct ILI9341 {
 
     static void vscroll (int vscroll =0) {
         cmd(0x37);
+        out16(vscroll>>8);
         out16(vscroll);
     }
 
     static uint16_t xEnd, yEnd;
 };
 
-template< uint32_t REG, uint32_t DAT>
-uint16_t ILI9341<REG,DAT>::xEnd = width-1;
+template< uint32_t ADDR>
+uint16_t ILI9341<ADDR>::xEnd = width-1;
 
-template< uint32_t REG, uint32_t DAT>
-uint16_t ILI9341<REG,DAT>::yEnd = height-1;
+template< uint32_t ADDR>
+uint16_t ILI9341<ADDR>::yEnd = height-1;
