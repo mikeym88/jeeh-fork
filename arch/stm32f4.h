@@ -199,7 +199,9 @@ template< typename TX, typename RX, int N =50 >
 struct UartBufDev : UartDev<TX,RX> {
     typedef UartDev<TX,RX> base;
 
-    UartBufDev () {
+    static void init () {
+        UartDev<TX,RX>::init();
+
         auto handler = []() {
             if (base::readable()) {
                 int c = base::getc();
