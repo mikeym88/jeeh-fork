@@ -38,4 +38,4 @@ Then start the build and upload as follows:
 pio run -t upload -e blink
 ```
 
-This project can also be used from the GUI version of PlatformIO, e.g. Atom.
+JeeH can also be used from the GUI version of PlatformIO, i.e. Atom or VSCode.

@@ -14,6 +14,6 @@ See the [Sampler](https://github.com/jeelabs/jeeh/tree/master/examples/sampler) 
 
 ### License
 
-JeeH wants to stand on the shoulders of giants. As every giant tends to prefer
-its own license scheme (that's one of the perks of being a giant), JeeH bows in
-total worship for each them and lives in the public domain. Do as you wish.
+JeeH wants to stand on the shoulders of giants. Since all giants tend to prefer
+their own licensing schemes (that's the perk of being a giant), JeeH bows in
+total worship of each of them and lives in the public domain. Do as you wish.
