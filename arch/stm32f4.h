@@ -454,8 +454,26 @@ struct Flash {
     constexpr static uint32_t sr   = Periph::flash + 0x0C;
     constexpr static uint32_t cr   = Periph::flash + 0x10;
 
+    static void write8 (void const* addr, uint8_t val) {
+        if (*(uint8_t*) addr != 0xFF)
+            return;
+        unlock();
+        MMIO32(cr) = (0<<8) | (1<<0); // PSIZE, PG
+        MMIO8((uint32_t) addr | 0x08000000) = val;
+        finish();
+    }
+
+    static void write16 (void const* addr, uint16_t val) {
+        if (*(uint16_t*) addr != 0xFFFF)
+            return;
+        unlock();
+        MMIO32(cr) = (1<<8) | (1<<0); // PSIZE, PG
+        MMIO16((uint32_t) addr | 0x08000000) = val;
+        finish();
+    }
+
     static void write32 (void const* addr, uint32_t val) {
-        if (*(uint32_t const*) addr != 0xFFFFFFFF)
+        if (*(uint32_t*) addr != 0xFFFFFFFF)
             return;
         unlock();
         MMIO32(cr) = (2<<8) | (1<<0); // PSIZE, PG
@@ -463,11 +481,22 @@ struct Flash {
         finish();
     }
 
+    static void write32buf (void const* a, uint32_t const* ptr, int len) {
+        if (*(uint32_t*) a != 0xFFFFFFFF)
+            return;
+        unlock();
+        MMIO32(cr) = (2<<8) | (1<<0); // PSIZE, PG
+        for (int i = 0; i < len; ++i)
+            MMIO32(((uint32_t) a + 4*i) | 0x08000000) = ptr[i];
+        finish();
+    }
+
     static void erasePage (void const* addr) {
+        uint32_t a = (uint32_t) addr & 0x07FFFFFF;
         // sectors are 16/16/16/16/64/128... KB
-        int sector = (uint32_t) addr < 0x10000 ? ((int) addr >> 14) :
-                     (uint32_t) addr < 0x20000 ? ((int) addr >> 16) + 3 :
-                                                 ((int) addr >> 17) + 4;
+        int sector = a < 0x10000 ? (a >> 14) :
+                     a < 0x20000 ? (a >> 16) + 3 :
+                                   (a >> 17) + 4;
         unlock();
         MMIO32(cr) = (1<<16) | (2<<8) | (sector<<3) | (1<<1); // STRT PG SNB SER
         finish();
