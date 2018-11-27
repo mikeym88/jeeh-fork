@@ -45,15 +45,21 @@ extern void enableSysTick (uint32_t divider =defaultHz/1000);
 
 enum class Pinmode {
     // mode (2), typer (1), pupdr (2)
-    in_analog        = 0b11000,
-    in_float         = 0b00000,
-    in_pulldown      = 0b00010,
-    in_pullup        = 0b00001,
+    in_analog        = 0b0011000,
+    in_float         = 0b0000000,
+    in_pulldown      = 0b0000010,
+    in_pullup        = 0b0000001,
 
-    out              = 0b01000,
-    out_od           = 0b01100,
-    alt_out          = 0b10000,
-    alt_out_od       = 0b10100,
+    out              = 0b0101000,
+    out_od           = 0b0101100,
+    alt_out          = 0b0110000,
+    alt_out_od       = 0b0110100,
+
+    // these can be added (not or-ed!) to the above output modes
+    ospeed_low       = 0b1100000,  // 4 MHz, will overflow, but ends up as -1
+    ospeed_medium    = 0b0000000,  // 25 MHz, default, no effect
+    ospeed_high      = 0b0100000,  // 50 MHz, add 1
+    ospeed_very_high = 0b1000000,  // 100 MHz, add 2
 };
 
 template<char port>
@@ -73,11 +79,12 @@ struct Port {
         // enable GPIOx clock
         MMIO32(Periph::rcc + 0x30) |= 1 << (port-'A');
 
+        int p2 = 2*pin;
         auto mval = static_cast<int>(m);
-        MMIO32(moder) = (MMIO32(moder) & ~(3<<(2*pin))) | ((mval>>3) << 2*pin);
-        MMIO32(typer) = (MMIO32(typer) & ~(1<<pin)) | (((mval>>2) & 1) << pin);
-        MMIO32(pupdr) = (MMIO32(pupdr) & ~(3<<(2*pin))) | ((mval & 3) << 2*pin);
-        MMIO32(ospeedr) = (MMIO32(ospeedr) & ~(3<<(2*pin))) | (0b01 << 2*pin);
+        MMIO32(ospeedr) = (MMIO32(ospeedr) & ~(3<<p2)) | (((mval>>5)&3) << p2);
+        MMIO32(moder) = (MMIO32(moder) & ~(3<<p2)) | (((mval>>3)&3) << p2);
+        MMIO32(typer) = (MMIO32(typer) & ~(1<<pin)) | (((mval>>2)&1) << pin);
+        MMIO32(pupdr) = (MMIO32(pupdr) & ~(3<<p2)) | ((mval&3) << p2);
 
         uint32_t afr = pin & 8 ? afrh : afrl;
         int shift = 4 * (pin & 7);
