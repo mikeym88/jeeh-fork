@@ -1,14 +1,14 @@
 // Hardware access for STM32F103 family microcontrollers
 // see [1] https://jeelabs.org/ref/STM32F4-RM0090.pdf
 
-struct Periph {
-    constexpr static uint32_t rtc   = 0x40002800;
-    constexpr static uint32_t pwr   = 0x40007000;
-    constexpr static uint32_t gpio  = 0x40020000;
-    constexpr static uint32_t rcc   = 0x40023800;
-    constexpr static uint32_t flash = 0x40023C00;
-    constexpr static uint32_t fsmc  = 0xA0000000;
-};
+namespace Periph {
+    constexpr uint32_t rtc   = 0x40002800;
+    constexpr uint32_t pwr   = 0x40007000;
+    constexpr uint32_t gpio  = 0x40020000;
+    constexpr uint32_t rcc   = 0x40023800;
+    constexpr uint32_t flash = 0x40023C00;
+    constexpr uint32_t fsmc  = 0xA0000000;
+}
 
 // interrupt vector table in ram
 
@@ -20,20 +20,20 @@ struct VTable {
         reset, nmi, hard_fault, memory_manage_fault, bus_fault, usage_fault,
         dummy_x001c[4], sv_call, debug_monitor, dummy_x0034, pend_sv, systick;
     Handler
-	wwdg, pvd, tamp_stamp, rtc_wkup, flash, rcc, exti0, exti1, exti2,
+        wwdg, pvd, tamp_stamp, rtc_wkup, flash, rcc, exti0, exti1, exti2,
         exti3, exti4, dma1_stream0, dma1_stream1, dma1_stream2, dma1_stream3,
-	dma1_stream4, dma1_stream5, dma1_stream6, adc, can1_tx, can1_rx0,
-	can1_rx1, can1_sce, exti9_5, tim1_brk_tim9, tim1_up_tim10,
-	tim1_trg_com_tim11, tim1_cc, tim2, tim3, tim4, i2c1_ev, i2c1_er,
-	i2c2_ev, i2c2_er, spi1, spi2, usart1, usart2, usart3, exti15_10,
-	rtc_alarm, usb_fs_wkup, tim8_brk_tim12, tim8_up_tim13,
-	tim8_trg_com_tim14, tim8_cc, dma1_stream7, fsmc, sdio, tim5, spi3,
-	uart4, uart5, tim6_dac, tim7, dma2_stream0, dma2_stream1, dma2_stream2,
-	dma2_stream3, dma2_stream4, eth, eth_wkup, can2_tx, can2_rx0, can2_rx1,
-	can2_sce, otg_fs, dma2_stream5, dma2_stream6, dma2_stream7, usart6,
-	i2c3_ev, i2c3_er, otg_hs_ep1_out, otg_hs_ep1_in, otg_hs_wkup, otg_hs,
-	dcmi, cryp, hash_rng, fpu, uart7, uart8, spi4, spi5, spi6, sai1,
-	lcd_tft, lcd_tft_err, dma2d;
+        dma1_stream4, dma1_stream5, dma1_stream6, adc, can1_tx, can1_rx0,
+        can1_rx1, can1_sce, exti9_5, tim1_brk_tim9, tim1_up_tim10,
+        tim1_trg_com_tim11, tim1_cc, tim2, tim3, tim4, i2c1_ev, i2c1_er,
+        i2c2_ev, i2c2_er, spi1, spi2, usart1, usart2, usart3, exti15_10,
+        rtc_alarm, usb_fs_wkup, tim8_brk_tim12, tim8_up_tim13,
+        tim8_trg_com_tim14, tim8_cc, dma1_stream7, fsmc, sdio, tim5, spi3,
+        uart4, uart5, tim6_dac, tim7, dma2_stream0, dma2_stream1, dma2_stream2,
+        dma2_stream3, dma2_stream4, eth, eth_wkup, can2_tx, can2_rx0, can2_rx1,
+        can2_sce, otg_fs, dma2_stream5, dma2_stream6, dma2_stream7, usart6,
+        i2c3_ev, i2c3_er, otg_hs_ep1_out, otg_hs_ep1_in, otg_hs_wkup, otg_hs,
+        dcmi, cryp, hash_rng, fpu, uart7, uart8, spi4, spi5, spi6, sai1,
+        lcd_tft, lcd_tft_err, dma2d;
 };
 
 // systick and delays
@@ -137,7 +137,7 @@ template< typename TX, typename RX >
 struct UartDev {
     // TODO does not recognise alternate TX pins
     constexpr static int uidx = TX::id ==  2 ? 1 :  // PA2, USART2
-								TX::id ==  9 ? 0 :  // PA9, USART1
+                                TX::id ==  9 ? 0 :  // PA9, USART1
                                 TX::id == 22 ? 0 :  // PB6, USART1
                                 TX::id == 26 ? 2 :  // PB10, USART3
                                 TX::id == 42 ? 2 :  // PC10, USART3
@@ -146,7 +146,7 @@ struct UartDev {
                                 // TODO more possible, using alt mode 8 iso 7
                                                0;   // else USART1
     constexpr static uint32_t base = uidx == 0 ? 0x40011000 : // USART1
-								     uidx == 5 ? 0x40011400 : // USART6
+                                     uidx == 5 ? 0x40011400 : // USART6
                                                  0x40004000 + 0x400 * uidx;
     constexpr static uint32_t sr  = base + 0x00;
     constexpr static uint32_t dr  = base + 0x04;
