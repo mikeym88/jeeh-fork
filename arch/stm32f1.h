@@ -12,6 +12,10 @@ struct Periph {  // [1] p.49-50
     constexpr static uint32_t rcc   = 0x40021000;
     constexpr static uint32_t flash = 0x40022000;
     constexpr static uint32_t crc   = 0x40023000;
+
+    inline volatile uint32_t& bit (uint32_t a, int b) {
+        return MMIO32(0x42000000 + ((a & 0xFFFFF) << 5) + (b << 2));
+    }
 };
 
 // interrupt vector table in ram
@@ -67,7 +71,7 @@ enum class Pinmode {  // [1] p.170
 
 template<char port>
 struct Port {  // [1] pp.170
-    constexpr static uint32_t base = Periph::gpio + 0x400 * (port-'A');
+    constexpr static uint32_t base = Periph::gpio + 0x400*(port-'A');
     constexpr static uint32_t crl  = base + 0x00;
     constexpr static uint32_t crh  = base + 0x04;
     constexpr static uint32_t idr  = base + 0x08;
@@ -77,7 +81,7 @@ struct Port {  // [1] pp.170
 
     static void mode (int pin, Pinmode m) {
         // enable GPIOx and AFIO clocks
-        MMIO32(Periph::rcc + 0x18) |= (1 << (port-'A'+2)) | (1<<0);
+        MMIO32(Periph::rcc+0x18) |= (1 << (port-'A'+2)) | (1<<0);
 
         auto mval = static_cast<int>(m);
         if (mval == 0b1000 || mval == 0b1100) {
@@ -148,7 +152,7 @@ struct UartDev {  // [1] pp.819
                                 TX::id == 44 ? 4 :  // PC12, UART5
                                                0;   // else  USART1
     constexpr static uint32_t base = uidx == 0 ? 0x40013800 :  // [1] p.50-51
-                                                 0x40004000 + 0x400 * uidx;
+                                                 0x40004000 + 0x400*uidx;
     constexpr static uint32_t sr  = base + 0x00;
     constexpr static uint32_t dr  = base + 0x04;
     constexpr static uint32_t brr = base + 0x08;
@@ -159,9 +163,9 @@ struct UartDev {  // [1] pp.819
         rx.mode(Pinmode::in_pullup);
 
         if (uidx == 0)
-            MMIO32(Periph::rcc + 0x18) |= 1 << 14; // enable USART1 clock
+            MMIO32(Periph::rcc+0x18) |= 1 << 14; // enable USART1 clock
         else
-            MMIO32(Periph::rcc + 0x1C) |= 1 << (16+uidx); // U(S)ART 2..5
+            MMIO32(Periph::rcc+0x1C) |= 1 << (16+uidx); // U(S)ART 2..5
 
         baud(115200);
         MMIO32(cr1) = (1<<13) | (1<<3) | (1<<2);  // UE, TE, RE
@@ -277,21 +281,21 @@ RingBuffer<NTX> UartBufDev<TX,RX,NTX,NRX>::xmit;
 static void enableClkAt8MHz () {  // [1] p.49
     constexpr uint32_t rcc = Periph::rcc;
 
-    MMIO32(rcc + 0x00) |= (1<<16); // rcc cr, set HSEON
-    while ((MMIO32(rcc + 0x00) & (1<<17)) == 0) ; // wait for HSERDY
-    MMIO32(rcc + 0x04) = (1<<0);  // hse, no pll [1] pp.100
+    MMIO32(rcc+0x00) |= (1<<16); // rcc cr, set HSEON
+    while ((MMIO32(rcc+0x00) & (1<<17)) == 0) ; // wait for HSERDY
+    MMIO32(rcc+0x04) = (1<<0);  // hse, no pll [1] pp.100
 }
 
 static void enableClkAt72MHz () {  // [1] p.49
     constexpr uint32_t rcc = Periph::rcc;
 
-    MMIO32(Periph::flash + 0x00) = 0x12; // flash acr, two wait states
-    MMIO32(rcc + 0x00) |= (1<<16); // rcc cr, set HSEON
-    while ((MMIO32(rcc + 0x00) & (1<<17)) == 0) ; // wait for HSERDY
+    MMIO32(Periph::flash+0x00) = 0x12; // flash acr, two wait states
+    MMIO32(rcc+0x00) |= (1<<16); // rcc cr, set HSEON
+    while ((MMIO32(rcc+0x00) & (1<<17)) == 0) ; // wait for HSERDY
     // 8 MHz xtal src, pll 9x, pclk1 = hclk/2, adcpre = pclk2/6 [1] pp.100
-    MMIO32(rcc + 0x04) = (7<<18) | (1<<16) | (2<<14) | (4<<8) | (2<<0);
-    MMIO32(rcc + 0x00) |= (1<<24); // rcc cr, set PLLON
-    while ((MMIO32(rcc + 0x00) & (1<<25)) == 0) ; // wait for PLLRDY
+    MMIO32(rcc+0x04) = (7<<18) | (1<<16) | (2<<14) | (4<<8) | (2<<0);
+    MMIO32(rcc+0x00) |= (1<<24); // rcc cr, set PLLON
+    while ((MMIO32(rcc+0x00) & (1<<25)) == 0) ; // wait for PLLRDY
 }
 
 static int fullSpeedClock () {
@@ -311,7 +315,7 @@ struct RTC {  // [1] pp.486
     constexpr static uint32_t cntl = Periph::rtc + 0x1C;
 
     RTC () {
-        MMIO32(Periph::rcc + 0x1C) |= (0b11<<27);  // enable PWREN and BKPEN
+        MMIO32(Periph::rcc+0x1C) |= (0b11<<27);  // enable PWREN and BKPEN
         MMIO32(Periph::pwr) |= (1<<8);  // set DBP [1] p.481
     }
 
@@ -374,7 +378,7 @@ struct SpiHw {  // [1] pp.742
                                 MO::id == 44 ? 2 :  // PC12, SPI3, remapped
                                                0;   // else  SPI1
     constexpr static uint32_t base = sidx == 0 ? 0x40013000 :
-                                                 0x40003400 + 0x400 * sidx;
+                                                 0x40003400 + 0x400*sidx;
     constexpr static uint32_t cr1 = base + 0x00;
     constexpr static uint32_t cr2 = base + 0x04;
     constexpr static uint32_t sr  = base + 0x08;
@@ -387,9 +391,9 @@ struct SpiHw {  // [1] pp.742
         MO::mode(Pinmode::alt_out);
 
         if (sidx == 0)
-            MMIO32(Periph::rcc + 0x18) |= 1 << 12;  // SPI1
+            MMIO32(Periph::rcc+0x18) |= 1 << 12;  // SPI1
         else
-            MMIO32(Periph::rcc + 0x1C) |= 1 << (sidx+13);  // SPI 2..3
+            MMIO32(Periph::rcc+0x1C) |= 1 << (sidx+13);  // SPI 2..3
 
         // SPE, BR=2, MSTR, CPOL (clk/8, i.e. 9 MHz)
         MMIO32(cr1) = (1<<6) | (2<<3) | (1<<2) | (CP<<1);  // [1] p.742
@@ -526,7 +530,7 @@ struct UsbDev {
 
 template< int N >
 struct ADC {
-    constexpr static uint32_t base  = 0x40012000 + 0x400 * N;
+    constexpr static uint32_t base  = 0x40012000 + 0x400*N;
     constexpr static uint32_t sr    = base + 0x00;
     constexpr static uint32_t cr1   = base + 0x04;
     constexpr static uint32_t cr2   = base + 0x08;
@@ -536,7 +540,7 @@ struct ADC {
     constexpr static uint32_t dr    = base + 0x4C;
 
     static void init () {
-        MMIO32(Periph::rcc + 0x18) |= 1 << (N+8);  // enable ADC 1 or 2
+        MMIO32(Periph::rcc+0x18) |= 1 << (N+8);  // enable ADC 1 or 2
         MMIO32(cr2) = (1<<23) | (1<<0);  // TSVREFE, ADON [1] pp.239
         wait_ms(2);  // see [1] p.222
         MMIO32(cr2) |= (1<<2);  // CAL
@@ -567,11 +571,11 @@ struct ADC {
 
 struct CRC32 {
     static uint32_t calculate (uint32_t const* ptr, int num) {
-        MMIO32(Periph::rcc + 0x14) |= 1<<6; // enable CRC unit
-        MMIO32(Periph::crc + 0x08) = 1;  // reset [1] p.64
+        MMIO32(Periph::rcc+0x14) |= 1<<6; // enable CRC unit
+        MMIO32(Periph::crc+0x08) = 1;  // reset [1] p.64
         while (--num >= 0)
-            MMIO32(Periph::crc + 0x00) = *ptr++;
-        return MMIO32(Periph::crc + 0x00);  // calculated crc32
+            MMIO32(Periph::crc+0x00) = *ptr++;
+        return MMIO32(Periph::crc+0x00);  // calculated crc32
     }
 };
 
@@ -601,14 +605,14 @@ struct CanDev {
 
     static void init (bool alt =false) {
 		if (alt) {
-			MMIO32(Periph::afio + 0x04) |= (2<<13); // CAN remap to B9+B8
+			MMIO32(Periph::afio+0x04) |= (2<<13); // CAN remap to B9+B8
 			Pin<'B',8>::mode(Pinmode::in_float);
 			Pin<'B',9>::mode(Pinmode::alt_out);
 		} else {
 			Pin<'A',11>::mode(Pinmode::in_float);
 			Pin<'A',12>::mode(Pinmode::alt_out);
 		}
-        MMIO32(Periph::rcc + 0x1C) |= (1<<25);  // enable CAN1
+        MMIO32(Periph::rcc+0x1C) |= (1<<25);  // enable CAN1
 
         MMIO32(mcr) &= ~(1<<1); // exit sleep
         MMIO32(mcr) |= (1<<6) | (1<<0); // set ABOM, init req
