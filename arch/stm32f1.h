@@ -1,7 +1,7 @@
 // Hardware access for STM32F103 family microcontrollers
 // see [1] https://jeelabs.org/ref/STM32F1-RM0008.pdf
 
-struct Periph {  // [1] p.49-50
+namespace Periph {  // [1] p.49-50
     constexpr static uint32_t rtc   = 0x40002800;
     constexpr static uint32_t iwdg  = 0x40003000;
     constexpr static uint32_t usb   = 0x40005C00;
@@ -13,10 +13,10 @@ struct Periph {  // [1] p.49-50
     constexpr static uint32_t flash = 0x40022000;
     constexpr static uint32_t crc   = 0x40023000;
 
-    inline volatile uint32_t& bit (uint32_t a, int b) {
+    static inline volatile uint32_t& bit (uint32_t a, int b) {
         return MMIO32(0x42000000 + ((a & 0xFFFFF) << 5) + (b << 2));
     }
-};
+}
 
 // interrupt vector table in ram
 
@@ -163,9 +163,9 @@ struct UartDev {  // [1] pp.819
         rx.mode(Pinmode::in_pullup);
 
         if (uidx == 0)
-            MMIO32(Periph::rcc+0x18) |= 1 << 14; // enable USART1 clock
+            Periph::bit(Periph::rcc+0x18, 14) = 1; // enable USART1 clock
         else
-            MMIO32(Periph::rcc+0x1C) |= 1 << (16+uidx); // U(S)ART 2..5
+            Periph::bit(Periph::rcc+0x1C, 16+uidx) = 1; // U(S)ART 2..5
 
         baud(115200);
         MMIO32(cr1) = (1<<13) | (1<<3) | (1<<2);  // UE, TE, RE
@@ -180,8 +180,7 @@ struct UartDev {  // [1] pp.819
     }
 
     static void putc (int c) {
-        while (!writable())
-            ;
+        while (!writable()) {}
         MMIO32(dr) = (uint8_t) c;
     }
 
@@ -190,8 +189,7 @@ struct UartDev {  // [1] pp.819
     }
 
     static int getc () {
-        while (!readable())
-            ;
+        while (!readable()) {}
         return MMIO32(dr);
     }
 
@@ -225,7 +223,7 @@ struct UartBufDev : UartDev<TX,RX> {
                 if (xmit.avail() > 0)
                     base::putc(xmit.get());
                 else
-                    MMIO32(base::cr1) &= ~(1<<7);  // disable TXEIE
+                    Periph::bit(base::cr1, 7) = 0;  // disable TXEIE
             }
         };
 
@@ -242,7 +240,7 @@ struct UartBufDev : UartDev<TX,RX> {
         constexpr int irq = (base::uidx < 3 ? 37 : 49) + base::uidx;
         MMIO32(nvic_en1r) = 1 << (irq-32);  // enable USART interrupt
 
-        MMIO32(base::cr1) |= (1<<5);  // enable RXNEIE
+        Periph::bit(base::cr1, 5) = 1;  // enable RXNEIE
     }
 
     static bool writable () {
@@ -250,10 +248,9 @@ struct UartBufDev : UartDev<TX,RX> {
     }
 
     static void putc (int c) {
-        while (!writable())
-            ;
+        while (!writable()) {}
         xmit.put(c);
-        MMIO32(base::cr1) |= (1<<7);  // enable TXEIE
+        Periph::bit(base::cr1, 7) = 1;  // enable TXEIE
     }
 
     static bool readable () {
@@ -261,8 +258,7 @@ struct UartBufDev : UartDev<TX,RX> {
     }
 
     static int getc () {
-        while (!readable())
-            ;
+        while (!readable()) {}
         return recv.get();
     }
 
@@ -281,8 +277,8 @@ RingBuffer<NTX> UartBufDev<TX,RX,NTX,NRX>::xmit;
 static void enableClkAt8MHz () {  // [1] p.49
     constexpr uint32_t rcc = Periph::rcc;
 
-    MMIO32(rcc+0x00) |= (1<<16); // rcc cr, set HSEON
-    while ((MMIO32(rcc+0x00) & (1<<17)) == 0) ; // wait for HSERDY
+    Periph::bit(rcc+0x00, 16) = 1; // rcc cr, set HSEON
+    while (Periph::bit(rcc+0x00, 17) == 0) {} // wait for HSERDY
     MMIO32(rcc+0x04) = (1<<0);  // hse, no pll [1] pp.100
 }
 
@@ -290,12 +286,12 @@ static void enableClkAt72MHz () {  // [1] p.49
     constexpr uint32_t rcc = Periph::rcc;
 
     MMIO32(Periph::flash+0x00) = 0x12; // flash acr, two wait states
-    MMIO32(rcc+0x00) |= (1<<16); // rcc cr, set HSEON
-    while ((MMIO32(rcc+0x00) & (1<<17)) == 0) ; // wait for HSERDY
+    Periph::bit(rcc+0x00, 16) = 1; // rcc cr, set HSEON
+    while (Periph::bit(rcc+0x00, 17) == 0) {} // wait for HSERDY
     // 8 MHz xtal src, pll 9x, pclk1 = hclk/2, adcpre = pclk2/6 [1] pp.100
     MMIO32(rcc+0x04) = (7<<18) | (1<<16) | (2<<14) | (4<<8) | (2<<0);
-    MMIO32(rcc+0x00) |= (1<<24); // rcc cr, set PLLON
-    while ((MMIO32(rcc+0x00) & (1<<25)) == 0) ; // wait for PLLRDY
+    Periph::bit(rcc+0x00, 24) = 1; // rcc cr, set PLLON
+    while (Periph::bit(rcc+0x00, 25) == 0) {} // wait for PLLRDY
 }
 
 static int fullSpeedClock () {
@@ -316,25 +312,25 @@ struct RTC {  // [1] pp.486
 
     RTC () {
         MMIO32(Periph::rcc+0x1C) |= (0b11<<27);  // enable PWREN and BKPEN
-        MMIO32(Periph::pwr) |= (1<<8);  // set DBP [1] p.481
+        Periph::bit(Periph::pwr, 8) = 1;  // set DBP [1] p.481
     }
 
     void init () {
-        MMIO32(bdcr) |= (1<<0);         // LSEON backup domain
+        Periph::bit(bdcr, 0) = 1;       // LSEON backup domain
         wait();
-        MMIO32(bdcr) |= (1<<8);         // RTSEL = LSE
-        MMIO32(bdcr) |= (1<<15);        // RTCEN
-        MMIO32(crl) &= ~(1<<3) ;        // clear RSF
-        while (MMIO32(crl) & (1<<3)) ;  // wait for RSF
+        Periph::bit(bdcr, 8) = 1;       // RTSEL = LSE
+        Periph::bit(bdcr, 15) = 1;      // RTCEN
+        Periph::bit(crl, 3) = 0;        // clear RSF
+        while (Periph::bit(crl, 3)) {}  // wait for RSF
         wait();
-        MMIO32(crl) |= (1<<4);          // set CNF
+        Periph::bit(crl, 4) = 1;        // set CNF
         MMIO32(prll) = 32767;           // set PRLL for 32 kHz crystal
-        MMIO32(crl) &= ~(1<<4);         // clear CNF
+        Periph::bit(crl, 4) = 0;        // clear CNF
         wait();
     }
 
     void wait () {
-        while ((MMIO32(bdcr) & (1<<1)) == 0) ;
+        while (Periph::bit(bdcr, 1) == 0) {}
     }
 
     operator int () {
@@ -349,10 +345,10 @@ struct RTC {  // [1] pp.486
 
     void operator= (int v) {
         wait();
-        MMIO32(crl) |= (1<<4);        // set CNF
+        Periph::bit(crl, 4) = 1;      // set CNF
         MMIO32(cntl) = (uint16_t) v;  // set lower 16 bits
         MMIO32(cnth) = v >> 16;       // set upper 16 bits
-        MMIO32(crl) &= ~(1<<4);       // clear CNF
+        Periph::bit(crl, 4) = 0;      // clear CNF
     }
 
     // access to the backup registers
@@ -391,14 +387,14 @@ struct SpiHw {  // [1] pp.742
         MO::mode(Pinmode::alt_out);
 
         if (sidx == 0)
-            MMIO32(Periph::rcc+0x18) |= 1 << 12;  // SPI1
+            Periph::bit(Periph::rcc+0x18, 12) = 1;  // SPI1
         else
-            MMIO32(Periph::rcc+0x1C) |= 1 << (sidx+13);  // SPI 2..3
+            Periph::bit(Periph::rcc+0x1C, sidx+13) = 1;  // SPI 2..3
 
         // SPE, BR=2, MSTR, CPOL (clk/8, i.e. 9 MHz)
         MMIO32(cr1) = (1<<6) | (2<<3) | (1<<2) | (CP<<1);  // [1] p.742
         (void) MMIO32(sr);  // appears to be needed to avoid hang in some cases
-        MMIO32(cr2) |= (1<<2);  // SSOE
+        Periph::bit(cr2, 2) = 1;  // SSOE
     }
 
     static void enable () { SS::write(0); }
@@ -406,7 +402,7 @@ struct SpiHw {  // [1] pp.742
 
     static uint8_t transfer (uint8_t v) {
         MMIO32(dr) = v;
-        while ((MMIO32(sr) & 1) == 0) ;
+        while (Periph::bit(sr, 0) == 0) {}
         return MMIO32(dr);
     }
 };
@@ -420,7 +416,7 @@ struct Iwdg {  // [1] pp.495
     constexpr static uint32_t sr  = Periph::iwdg + 0x0C;
 
     Iwdg (int rate =7) {
-        while (sr & (1<<0)) ;  // wait until !PVU
+        while (Periph::bit(sr, 0)) {}  // wait until !PVU
         MMIO32(kr) = 0x5555;   // unlock PR
         MMIO32(pr) = rate;     // max timeout, 0 = 400ms, 7 = 26s
         MMIO32(kr) = 0xCCCC;   // start watchdog
@@ -431,7 +427,7 @@ struct Iwdg {  // [1] pp.495
     }
 
     static void reload (int n) {
-        while (sr & (1<<1)) ;  // wait until !RVU
+        while (Periph::bit(sr, 1)) {}  // wait until !RVU
         MMIO32(kr) = 0x5555;   // unlock PR
         MMIO32(rlr) = n;
         kick();
@@ -474,7 +470,7 @@ struct Flash {
     }
 
     static void finish () {
-        while (MMIO32(sr) & (1<<0)) ;
+        while (MMIO32(sr) & (1<<0)) {}
         MMIO32(cr) = 0x80;
     }
 };
@@ -504,7 +500,7 @@ struct UsbDev {
     }
 
     static void putc (int c) {
-        while (!writable()) ;
+        while (!writable()) {}
         USB::txBuf[USB::txFill++] = c;
     }
 
@@ -514,7 +510,7 @@ struct UsbDev {
     }
 
     static int getc () {
-        while (!readable()) ;
+        while (!readable()) {}
         return USB::rxBuf[USB::rxNext++];
     }
 
@@ -540,11 +536,11 @@ struct ADC {
     constexpr static uint32_t dr    = base + 0x4C;
 
     static void init () {
-        MMIO32(Periph::rcc+0x18) |= 1 << (N+8);  // enable ADC 1 or 2
+        Periph::bit(Periph::rcc+0x18, N+8) = 1;  // enable ADC 1 or 2
         MMIO32(cr2) = (1<<23) | (1<<0);  // TSVREFE, ADON [1] pp.239
         wait_ms(2);  // see [1] p.222
-        MMIO32(cr2) |= (1<<2);  // CAL
-        while (MMIO32(cr2) & (1<<2)) ;  // wait until calibration completed
+        Periph::bit(cr2, 2) = 1;  // CAL
+        while (Periph::bit(cr2, 2)) {}  // wait until calibration completed
         MMIO32(smpr1) = (7<<21) | (7<<18);  // slow temp/vref conv's [1] p.243
     }
 
@@ -561,8 +557,8 @@ struct ADC {
     // read direct channel number (also: 16 = temp, 17 = vref)
     static uint16_t read (uint8_t chan) {
         MMIO32(sqr3) = chan;
-        MMIO32(cr2) |= (1<<0);  // start conversion
-        while ((MMIO32(sr) & (1<<1)) == 0) ;  // EOC [1] p.236
+        Periph::bit(cr2, 0) = 1;  // start conversion
+        while (Periph::bit(sr, 1) == 0) {}  // EOC [1] p.236
         return MMIO32(dr);
     }
 };
@@ -571,7 +567,7 @@ struct ADC {
 
 struct CRC32 {
     static uint32_t calculate (uint32_t const* ptr, int num) {
-        MMIO32(Periph::rcc+0x14) |= 1<<6; // enable CRC unit
+        Periph::bit(Periph::rcc+0x14, 6) = 1; // enable CRC unit
         MMIO32(Periph::crc+0x08) = 1;  // reset [1] p.64
         while (--num >= 0)
             MMIO32(Periph::crc+0x00) = *ptr++;
@@ -604,43 +600,43 @@ struct CanDev {
     constexpr static uint32_t fr2  = base + 0x244;
 
     static void init (bool alt =false) {
-		if (alt) {
-			MMIO32(Periph::afio+0x04) |= (2<<13); // CAN remap to B9+B8
-			Pin<'B',8>::mode(Pinmode::in_float);
-			Pin<'B',9>::mode(Pinmode::alt_out);
-		} else {
-			Pin<'A',11>::mode(Pinmode::in_float);
-			Pin<'A',12>::mode(Pinmode::alt_out);
-		}
-        MMIO32(Periph::rcc+0x1C) |= (1<<25);  // enable CAN1
+        if (alt) {
+            MMIO32(Periph::afio+0x04) |= (2<<13); // CAN remap to B9+B8
+            Pin<'B',8>::mode(Pinmode::in_float);
+            Pin<'B',9>::mode(Pinmode::alt_out);
+        } else {
+            Pin<'A',11>::mode(Pinmode::in_float);
+            Pin<'A',12>::mode(Pinmode::alt_out);
+        }
+        Periph::bit(Periph::rcc+0x1C, 25) = 1;  // enable CAN1
 
-        MMIO32(mcr) &= ~(1<<1); // exit sleep
+        Periph::bit(mcr, 1) = 0; // exit sleep
         MMIO32(mcr) |= (1<<6) | (1<<0); // set ABOM, init req
-        while ((MMIO32(msr) & (1<<0)) == 0) {}
+        while (Periph::bit(msr, 0) == 0) {}
         //MMIO32(btr) = (7<<20) | (5<<16) | (2<<0); // 1 MBps
         MMIO32(btr) = (6<<20) | (9<<16) | (1<<0); // 1 MBps
-        MMIO32(mcr) &= ~(1<<0); // init leave
-        while (MMIO32(msr) & (1<<0)) {}
-        MMIO32(fmr) &= ~(1<<0); // ~FINIT
+        Periph::bit(mcr, 0) = 0; // init leave
+        while (Periph::bit(msr, 0)) {}
+        Periph::bit(fmr, 0) = 0; // ~FINIT
     }
 
     static void filterInit (int num, int id =0, int mask =0) {
-        MMIO32(far) &= ~(1<<num); // ~FACT
-        MMIO32(fsr) |= (1<<num); // FSC 32b
-        MMIO32(fr1 + 8 * num) = id;
-        MMIO32(fr2 + 8 * num) = mask;
-        MMIO32(far) |= (1<<num); // FACT
+        Periph::bit(far, num) = 0; // ~FACT
+        Periph::bit(fsr, num) = 1; // FSC 32b
+        MMIO32(fr1 + 8*num) = id;
+        MMIO32(fr2 + 8*num) = mask;
+        Periph::bit(far, num) = 1; // FACT
     }
 
     static void transmit (int id, const void* ptr, int len) {
-        if (MMIO32(tsr) & (1<<26)) { // TME0
+        if (Periph::bit(tsr, 26)) { // TME0
             MMIO32(tir) = (id<<21);
             MMIO32(tdtr) = (len<<0);
             // this assumes that misaligned word access works
             MMIO32(tdlr) = ((const uint32_t*) ptr)[0];
             MMIO32(tdhr) = ((const uint32_t*) ptr)[1];
 
-            MMIO32(tir) |= (1<<0); // TXRQ
+            Periph::bit(tir, 0) = 1; // TXRQ
         }
     }
 
@@ -651,7 +647,7 @@ struct CanDev {
             len = MMIO32(rdtr) & 0x0F;
             ((uint32_t*) ptr)[0] = MMIO32(rdlr);
             ((uint32_t*) ptr)[1] = MMIO32(rdhr);
-            MMIO32(rfr) |= (1<<5); // RFOM
+            Periph::bit(rfr, 5) = 1; // RFOM
         }
         return len;
     }
