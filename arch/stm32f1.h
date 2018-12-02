@@ -298,7 +298,6 @@ static int fullSpeedClock () {
     constexpr uint32_t hz = 72000000;
     enableClkAt72MHz();                 // using external 8 MHz crystal
     enableSysTick(hz/1000);             // systick once every 1 ms
-    MMIO32(0x40013808) = hz/115200;     // usart1: 115200 baud @ 72 MHz
     return hz;
 }
 
