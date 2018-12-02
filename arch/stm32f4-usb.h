@@ -22,22 +22,22 @@ class UsbDev {
     constexpr static uint32_t DOEPCTL0  = base + 0xB00;  // p.1316
     constexpr static uint32_t DOEPTSIZ0 = base + 0xB10;  // p.1323
 
-    uint32_t inPending = 0, inReady = 0, inData;
-    bool dtr = false;  // only true when there is an active serial session
+    static uint32_t inPending, inReady, inData;
+    static bool dtr;  // only true when there is an active serial session
 
-    static const uint8_t devDesc [18];
-    static const uint8_t cnfDesc [67];
-
-    union {
+    static union Setup {
         struct { uint8_t typ, req; uint16_t val, idx, len; };
         uint32_t buf [2];
     } setupPkt;
 
-    volatile uint32_t& fifo (int ep) {
+    static const uint8_t devDesc [18];
+    static const uint8_t cnfDesc [67];
+
+    static volatile uint32_t& fifo (int ep) {
         return MMIO32(base + (ep+1) * 0x1000);
     }
 
-    void sendEp0 (void const* ptr, uint32_t len) {
+    static void sendEp0 (void const* ptr, uint32_t len) {
         if (len > setupPkt.len)
             len = setupPkt.len;
 
@@ -49,7 +49,7 @@ class UsbDev {
             fifo(0) = *wptr++;
     }
 
-    void setConfig () {
+    static void setConfig () {
         MMIO32(DOEPTSIZ0+0x20) = 64;  // accept 64b on RX ep1
         MMIO32(DOEPCTL0+0x20) = (3<<18) | (1<<15) | 64  // BULK ep1
                               | (1<<31) | (1<<26);      // EPENA, CNAK
@@ -60,7 +60,7 @@ class UsbDev {
     }
 
 public:
-    void init () {
+    static void init () {
         MMIO32(Periph::rcc+0x34) |= (1<<7);  // OTGFSEN
 
         PinA<12> usbPin;
@@ -74,7 +74,7 @@ public:
         MMIO32(DCFG) |= (3<<0);  // DSPD
     }
 
-    void poll () {
+    static void poll () {
         uint32_t irq = MMIO32(GINTSTS);
         //if (irq & ~0x04008028)
         //    debugf("irq %08x\n", irq);
@@ -170,12 +170,12 @@ public:
         }
     }
 
-    bool writable () {
+    static bool writable () {
         poll();
         return (uint16_t) MMIO32(DTXFSTS0+0x20) > 0;
     }
 
-    void putc (int c) {
+    static void putc (int c) {
         if (dtr) {
             while (!writable()) {}
             MMIO32(DIEPTSIZ0+0x20) = 1;
@@ -183,12 +183,12 @@ public:
         }
     }
 
-    bool readable () {
+    static bool readable () {
         poll();
         return inReady > 0 || inPending > 0;
     }
 
-    int getc () {
+    static int getc () {
         while (!readable()) {}
 
         // get 4 chars from the USB fifo, if needed
@@ -207,6 +207,11 @@ public:
         return c;
     }
 };
+
+uint32_t UsbDev::inPending = 0, UsbDev::inReady = 0, UsbDev::inData;
+bool UsbDev::dtr = false;
+
+union UsbDev::Setup UsbDev::setupPkt;
 
 const uint8_t UsbDev::devDesc [] = {
     18, 1, 0, 2, 2, 0, 0, 64,
