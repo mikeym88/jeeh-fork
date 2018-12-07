@@ -49,21 +49,30 @@ extern void enableSysTick (uint32_t divider =defaultHz/1000);
 
 enum class Pinmode {
     // mode (2), typer (1), pupdr (2)
-    in_analog        = 0b0011000,
-    in_float         = 0b0000000,
-    in_pulldown      = 0b0000010,
-    in_pullup        = 0b0000001,
+    in_analog         = 0b0011000,
+    in_float          = 0b0000000,
+    in_pulldown       = 0b0000010,
+    in_pullup         = 0b0000001,
 
-    out              = 0b0101000,
-    out_od           = 0b0101100,
-    alt_out          = 0b0110000,
-    alt_out_od       = 0b0110100,
+    out               = 0b0101000,
+    out_od            = 0b0101100,
+    alt_out           = 0b0110000,
+    alt_out_od        = 0b0110100,
 
-    // these can be added (not or-ed!) to the above output modes
-    ospeed_low       = 0b1100000,  // 4 MHz, will overflow, but ends up as -1
-    ospeed_medium    = 0b0000000,  // 25 MHz, default, no effect
-    ospeed_high      = 0b0100000,  // 50 MHz, add 1
-    ospeed_very_high = 0b1000000,  // 100 MHz, add 2
+    out_2mhz          = 0b0001000,
+    out_od_2mhz       = 0b0001100,
+    alt_out_2mhz      = 0b0010000,
+    alt_out_od_2mhz   = 0b0010100,
+
+    out_50mhz         = 0b1001000,
+    out_od_50mhz      = 0b1001100,
+    alt_out_50mhz     = 0b1010000,
+    alt_out_od_50mhz  = 0b1010100,
+
+    out_100mhz        = 0b1101000,
+    out_od_100mhz     = 0b1101100,
+    alt_out_100mhz    = 0b1110000,
+    alt_out_od_100mhz = 0b1110100,
 };
 
 template<char port>
