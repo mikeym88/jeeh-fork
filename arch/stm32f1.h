@@ -628,7 +628,7 @@ struct CanDev {
         Periph::bit(far, num) = 1; // FACT
     }
 
-    static void transmit (int id, const void* ptr, int len) {
+    static bool transmit (int id, const void* ptr, int len) {
         if (Periph::bit(tsr, 26)) { // TME0
             MMIO32(tir) = (id<<21);
             MMIO32(tdtr) = (len<<0);
@@ -637,7 +637,9 @@ struct CanDev {
             MMIO32(tdhr) = ((const uint32_t*) ptr)[1];
 
             Periph::bit(tir, 0) = 1; // TXRQ
+            return true;
         }
+        return false;
     }
 
     static int receive (int* id, void* ptr) {
