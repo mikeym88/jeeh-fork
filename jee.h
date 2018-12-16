@@ -168,12 +168,12 @@ class I2cBus {
             __asm("");
     }
     static void sclLo () {
-        scl = 0;
         hold();
+        scl = 0;
     }
     static void sclHi () {
-        scl = 1;
         hold();
+        scl = 1;
         for (int i = 0; i < 10000; ++i)
             if (scl)
                 break;
@@ -186,7 +186,7 @@ public:
     }
 
     static bool start(int addr) {
-        sda = 1;
+        sclLo();
         sclHi();
         sda = 0;
         return write(addr);
