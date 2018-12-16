@@ -92,16 +92,17 @@ struct Port {
         // enable GPIOx clock
         Periph::bit(Periph::rcc+0x30, port-'A') = 1;
 
+        // set the alternate mode before switching to it
+        uint32_t afr = pin & 8 ? afrh : afrl;
+        int shift = 4 * (pin & 7);
+        MMIO32(afr) = (MMIO32(afr) & ~(0xF << shift)) | (alt << shift);
+
         int p2 = 2*pin;
         auto mval = static_cast<int>(m);
         MMIO32(ospeedr) = (MMIO32(ospeedr) & ~(3<<p2)) | (((mval>>5)&3) << p2);
         MMIO32(moder) = (MMIO32(moder) & ~(3<<p2)) | (((mval>>3)&3) << p2);
         MMIO32(typer) = (MMIO32(typer) & ~(1<<pin)) | (((mval>>2)&1) << pin);
         MMIO32(pupdr) = (MMIO32(pupdr) & ~(3<<p2)) | ((mval&3) << p2);
-
-        uint32_t afr = pin & 8 ? afrh : afrl;
-        int shift = 4 * (pin & 7);
-        MMIO32(afr) = (MMIO32(afr) & ~(0xF << shift)) | (alt << shift);
     }
 
     static void modeMap (uint16_t pins, Pinmode m, int alt =0) {
@@ -527,5 +528,54 @@ struct Flash {
     static void finish () {
         while (Periph::bit(sr, 16)) {}
         MMIO32(cr) = (1<<31); // LOCK
+    }
+};
+
+// timers and PWM
+
+template< int N >
+struct Timer {
+    constexpr static int tidx = N ==  1 ? 111 :  // TIM1,  APB2
+                                N ==  2 ?   0 :  // TIM2,  APB1
+                                N ==  3 ?   1 :  // TIM3,  APB1
+                                N ==  4 ?   2 :  // TIM4,  APB1
+                                N ==  5 ?   3 :  // TIM5,  APB1
+                                N ==  6 ?   4 :  // TIM6,  APB1
+                                N ==  7 ?   5 :  // TIM7,  APB1
+                                N ==  8 ? 112 :  // TIM8,  APB2
+                                N ==  9 ? 127 :  // TIM9,  APB2
+                                N == 10 ? 128 :  // TIM10, APB2
+                                N == 11 ? 129 :  // TIM11, APB2
+                                N == 12 ?   6 :  // TIM12, APB1
+                                N == 13 ?   7 :  // TIM13, APB1
+                                N == 14 ?   8 :  // TIM14, APB1
+                                          111;   // else TIM1
+
+    constexpr static uint32_t base = tidx < 100 ? 0x40000000 + 0x400*tidx :
+                                                  0x40010000 + 0x400*(tidx-111);
+    constexpr static uint32_t cr1   = base + 0x00;
+    constexpr static uint32_t ccmr1 = base + 0x18;
+    constexpr static uint32_t ccer  = base + 0x20;
+    constexpr static uint32_t psc   = base + 0x28;
+    constexpr static uint32_t arr   = base + 0x2C;
+    constexpr static uint32_t ccr1  = base + 0x34;
+
+    static void init (uint32_t limit, uint32_t scale =0) {
+        if (tidx < 100)
+            Periph::bit(Periph::rcc+0x40, tidx) = 1;
+        else
+            Periph::bit(Periph::rcc+0x44, tidx-111) = 1;
+        MMIO16(psc) = scale;
+        MMIO32(arr) = limit-1;
+        Periph::bit(cr1, 0) = 1; // CEN
+    }
+
+    // TODO TIM1 (and TIM8?) don't seem to work with PWM
+    static void pwm (uint32_t match) {
+        Periph::bit(cr1, 0) = 0; // CEN
+        MMIO16(ccmr1) = 0x78; // PWM mode
+        MMIO32(ccr1) = match;
+        Periph::bit(ccer, 0) = 1; // CC1E
+        Periph::bit(cr1, 0) = 1; // CEN
     }
 };
