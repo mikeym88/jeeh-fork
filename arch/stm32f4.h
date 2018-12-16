@@ -535,24 +535,23 @@ struct Flash {
 
 template< int N >
 struct Timer {
-    constexpr static int tidx = N ==  1 ? 111 :  // TIM1,  APB2
-                                N ==  2 ?   0 :  // TIM2,  APB1
-                                N ==  3 ?   1 :  // TIM3,  APB1
-                                N ==  4 ?   2 :  // TIM4,  APB1
-                                N ==  5 ?   3 :  // TIM5,  APB1
-                                N ==  6 ?   4 :  // TIM6,  APB1
-                                N ==  7 ?   5 :  // TIM7,  APB1
-                                N ==  8 ? 112 :  // TIM8,  APB2
-                                N ==  9 ? 127 :  // TIM9,  APB2
-                                N == 10 ? 128 :  // TIM10, APB2
-                                N == 11 ? 129 :  // TIM11, APB2
-                                N == 12 ?   6 :  // TIM12, APB1
-                                N == 13 ?   7 :  // TIM13, APB1
-                                N == 14 ?   8 :  // TIM14, APB1
-                                          111;   // else TIM1
+    constexpr static int tidx = N ==  1 ? 64 :  // TIM1,  APB2
+                                N ==  2 ?  0 :  // TIM2,  APB1
+                                N ==  3 ?  1 :  // TIM3,  APB1
+                                N ==  4 ?  2 :  // TIM4,  APB1
+                                N ==  5 ?  3 :  // TIM5,  APB1
+                                N ==  6 ?  4 :  // TIM6,  APB1
+                                N ==  7 ?  5 :  // TIM7,  APB1
+                                N ==  8 ? 65 :  // TIM8,  APB2
+                                N ==  9 ? 70 :  // TIM9,  APB2
+                                N == 10 ? 71 :  // TIM10, APB2
+                                N == 11 ? 72 :  // TIM11, APB2
+                                N == 12 ?  6 :  // TIM12, APB1
+                                N == 13 ?  7 :  // TIM13, APB1
+                                N == 14 ?  8 :  // TIM14, APB1
+                                          64;   // else TIM1
 
-    constexpr static uint32_t base = tidx < 100 ? 0x40000000 + 0x400*tidx :
-                                                  0x40010000 + 0x400*(tidx-111);
+    constexpr static uint32_t base  = 0x40000000 + 0x400*tidx;
     constexpr static uint32_t cr1   = base + 0x00;
     constexpr static uint32_t ccmr1 = base + 0x18;
     constexpr static uint32_t ccer  = base + 0x20;
@@ -561,10 +560,10 @@ struct Timer {
     constexpr static uint32_t ccr1  = base + 0x34;
 
     static void init (uint32_t limit, uint32_t scale =0) {
-        if (tidx < 100)
+        if (tidx < 64)
             Periph::bit(Periph::rcc+0x40, tidx) = 1;
         else
-            Periph::bit(Periph::rcc+0x44, tidx-111) = 1;
+            Periph::bit(Periph::rcc+0x44, tidx-64) = 1;
         MMIO16(psc) = scale;
         MMIO32(arr) = limit-1;
         Periph::bit(cr1, 0) = 1; // CEN
@@ -572,10 +571,8 @@ struct Timer {
 
     // TODO TIM1 (and TIM8?) don't seem to work with PWM
     static void pwm (uint32_t match) {
-        Periph::bit(cr1, 0) = 0; // CEN
-        MMIO16(ccmr1) = 0x78; // PWM mode
+        MMIO16(ccmr1) = 0x60; // PWM mode
         MMIO32(ccr1) = match;
         Periph::bit(ccer, 0) = 1; // CC1E
-        Periph::bit(cr1, 0) = 1; // CEN
     }
 };
