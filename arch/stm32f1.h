@@ -599,14 +599,15 @@ struct CanDev {
     constexpr static uint32_t fr1  = base + 0x240;
     constexpr static uint32_t fr2  = base + 0x244;
 
-    static void init (bool alt =false) {
+    static void init (bool singleWire =false, bool alt =false) {
+        auto swMode = singleWire ? Pinmode::alt_out_od : Pinmode::alt_out;
         if (alt) {
             MMIO32(Periph::afio+0x04) |= (2<<13); // CAN remap to B9+B8
             Pin<'B',8>::mode(Pinmode::in_float);
-            Pin<'B',9>::mode(Pinmode::alt_out);
+            Pin<'B',9>::mode(swMode);
         } else {
             Pin<'A',11>::mode(Pinmode::in_float);
-            Pin<'A',12>::mode(Pinmode::alt_out);
+            Pin<'A',12>::mode(swMode);
         }
         Periph::bit(Periph::rcc+0x1C, 25) = 1;  // enable CAN1
 

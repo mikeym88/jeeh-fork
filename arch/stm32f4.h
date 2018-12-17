@@ -326,14 +326,15 @@ struct CanDev {
     constexpr static uint32_t fr1  = base + 0x240;
     constexpr static uint32_t fr2  = base + 0x244;
 
-    static void init () {
+    static void init (bool singleWire =false) {
+        auto swMode = singleWire ? Pinmode::alt_out_od : Pinmode::alt_out;
         if (N == 0) {
             // alt mode CAN1:    5432109876543210
-            Port<'B'>::modeMap(0b0000001100000000, Pinmode::alt_out, 9);
+            Port<'B'>::modeMap(0b0000001100000000, swMode, 9);
             Periph::bit(Periph::rcc+0x40, 25) = 1;  // enable CAN1
         } else {
             // alt mode CAN2:    5432109876543210
-            Port<'B'>::modeMap(0b0000000001100000, Pinmode::alt_out, 9);
+            Port<'B'>::modeMap(0b0000000001100000, swMode, 9);
             Periph::bit(Periph::rcc+0x40, 26) = 1;  // enable CAN2
         }
 

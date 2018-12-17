@@ -303,10 +303,11 @@ struct CanDev {
     constexpr static uint32_t fr1  = base + 0x240;
     constexpr static uint32_t fr2  = base + 0x244;
 
-    static void init () {
-		// alt mode CAN1:    5432109876543210
-		Port<'A'>::modeMap(0b0001100000000000, Pinmode::alt_out, 9);
-		MMIO32(Periph::rcc + 0x58) |= (1<<25);  // enable CAN1
+    static void init (bool singleWire =false) {
+        auto swMode = singleWire ? Pinmode::alt_out_od : Pinmode::alt_out;
+        // alt mode CAN1:    5432109876543210
+        Port<'A'>::modeMap(0b0001100000000000, swMode, 9);
+        MMIO32(Periph::rcc + 0x58) |= (1<<25);  // enable CAN1
 
         MMIO32(mcr) &= ~(1<<1); // exit sleep
         MMIO32(mcr) |= (1<<6) | (1<<0); // set ABOM, init req
