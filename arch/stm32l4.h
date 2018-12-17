@@ -325,7 +325,7 @@ struct CanDev {
         MMIO32(far) |= (1<<num); // FACT
     }
 
-    static void transmit (int id, const void* ptr, int len) {
+    static bool transmit (int id, const void* ptr, int len) {
         if (MMIO32(tsr) & (1<<26)) { // TME0
             MMIO32(tir) = (id<<21);
             MMIO32(tdtr) = (len<<0);
@@ -334,7 +334,9 @@ struct CanDev {
             MMIO32(tdhr) = ((const uint32_t*) ptr)[1];
 
             MMIO32(tir) |= (1<<0); // TXRQ
+            return true;
         }
+        return false;
     }
 
     static int receive (int* id, void* ptr) {
