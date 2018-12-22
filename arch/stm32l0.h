@@ -307,3 +307,16 @@ struct Iwdg {  // [1] pp.495
         kick();
     }
 };
+
+// low-poewr modes
+
+static void powerDown () {
+    MMIO32(Periph::rcc+0x38) |= (1<<28); // PWREN
+    MMIO32(Periph::pwr) |= (1<<10) | (1<<9) | (1<<1); // FWU, ULP, PDDS
+
+    constexpr uint32_t scr = 0xE000ED10;
+    MMIO32(scr) |= (1<<2);  // set SLEEPDEEP
+
+    __asm("cpsid i");
+    __asm("wfi");
+}
