@@ -1,6 +1,8 @@
 // see [1] https://jeelabs.org/ref/STM32L0x2-RM0376.pdf
 
 struct Periph {
+    constexpr static uint32_t iwdg  = 0x40003000;
+    constexpr static uint32_t pwr   = 0x40007000;
     constexpr static uint32_t rcc   = 0x40021000;
     constexpr static uint32_t flash = 0x40022000;
     constexpr static uint32_t gpio  = 0x50000000;
@@ -278,3 +280,30 @@ static int fullSpeedClock () {
     MMIO32(0x4001380C) = hz/115200;     // usart1: 115200 baud @ 32 MHz
     return hz;
 }
+
+// independent watchdog
+
+struct Iwdg {  // [1] pp.495
+    constexpr static uint32_t kr  = Periph::iwdg + 0x00;
+    constexpr static uint32_t pr  = Periph::iwdg + 0x04;
+    constexpr static uint32_t rlr = Periph::iwdg + 0x08;
+    constexpr static uint32_t sr  = Periph::iwdg + 0x0C;
+
+    Iwdg (int rate =7) {
+        while (MMIO32(sr) & (1<<0)) {}  // wait until !PVU
+        MMIO32(kr) = 0x5555;   // unlock PR
+        MMIO32(pr) = rate;     // max timeout, 0 = 400ms, 7 = 26s
+        MMIO32(kr) = 0xCCCC;   // start watchdog
+    }
+
+    static void kick () {
+        MMIO32(kr) = 0xAAAA;  // reset the watchdog timout
+    }
+
+    static void reload (int n) {
+        while (MMIO32(sr) & (1<<1)) {}  // wait until !RVU
+        MMIO32(kr) = 0x5555;   // unlock PR
+        MMIO32(rlr) = n;
+        kick();
+    }
+};
