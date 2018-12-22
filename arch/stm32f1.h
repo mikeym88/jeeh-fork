@@ -655,3 +655,16 @@ struct CanDev {
         return len;
     }
 };
+
+// low-poewr modes
+
+static void powerDown () {
+    Periph::bit(Periph::rcc+0x1C, 28) = 1; // PWREN
+    Periph::bit(Periph::pwr, 1) = 1;  // set PDDS
+
+    constexpr uint32_t scr = 0xE000ED10;
+    MMIO32(scr) |= (1<<2);  // set SLEEPDEEP
+
+    __asm("cpsid i");
+    __asm("wfi");
+}
