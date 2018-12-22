@@ -656,7 +656,7 @@ struct CanDev {
     }
 };
 
-// low-poewr modes
+// low-power modes
 
 static void powerDown () {
     Periph::bit(Periph::rcc+0x1C, 28) = 1; // PWREN

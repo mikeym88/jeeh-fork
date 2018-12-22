@@ -308,7 +308,7 @@ struct Iwdg {  // [1] pp.495
     }
 };
 
-// low-poewr modes
+// low-power modes
 
 static void powerDown () {
     MMIO32(Periph::rcc+0x38) |= (1<<28); // PWREN
