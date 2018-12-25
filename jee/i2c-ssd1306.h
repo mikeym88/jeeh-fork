@@ -1,16 +1,16 @@
 // Driver for an SSD1306-based 128x64 OLED display, connected over I2C
 // see https://jeelabs.org/ref/SSD1306.pdf
 
-template< typename I2C, int addr =0x3C >
+template< typename I2C, bool BIG =false, int addr =0x3C >
 struct SSD1306 {
     constexpr static int width = 128;
-    constexpr static int height = 64;
+    constexpr static int height = BIG ? 64 : 32;
 
     static void init () {
         static uint8_t config [] = {
             0xAE,  // DISPLAYOFF
             0xA8,  // SETMULTIPLEX
-              63,
+            height-1,
             0xD3,  // SETDISPLAYOFFSET
                0,
             0x40,  // SETSTARTLINE
@@ -22,9 +22,9 @@ struct SSD1306 {
             0xA1,  // SEGREMAP | 0x1
             0xC8,  // COMSCANDEC
             0xDA,  // SETCOMPINS
-            0x12,
+            BIG ? 0x12 : 0x02,
             0x81,  // SETCONTRAST
-            0xCF,
+            BIG ? 0xCF : 0x8F,
             0xD9,  // SETPRECHARGE
             0xF1,
             0xDB,  // SETVCOMDETECT
@@ -93,4 +93,3 @@ struct SSD1306 {
         I2C::stop();
     }
 };
-
