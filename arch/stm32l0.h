@@ -33,20 +33,35 @@ extern void enableSysTick (uint32_t divider =defaultHz/1000);
 
 enum class Pinmode {
     // mode (2), typer (1), pupdr (2)
-    in_analog        = 0b11000,
-    in_float         = 0b00000,
-    in_pulldown      = 0b00010,
-    in_pullup        = 0b00001,
+    in_analog         = 0b0011000,
+    in_float          = 0b0000000,
+    in_pulldown       = 0b0000010,
+    in_pullup         = 0b0000001,
 
-    out              = 0b01000,
-    out_od           = 0b01100,
-    alt_out          = 0b10000,
-    alt_out_od       = 0b10100,
+    out               = 0b0101000,
+    out_od            = 0b0101100,
+    alt_out           = 0b0110000,
+    alt_out_od        = 0b0110100,
+
+    out_2mhz          = 0b0001000,
+    out_od_2mhz       = 0b0001100,
+    alt_out_2mhz      = 0b0010000,
+    alt_out_od_2mhz   = 0b0010100,
+
+    out_50mhz         = 0b1001000,
+    out_od_50mhz      = 0b1001100,
+    alt_out_50mhz     = 0b1010000,
+    alt_out_od_50mhz  = 0b1010100,
+
+    out_100mhz        = 0b1101000,
+    out_od_100mhz     = 0b1101100,
+    alt_out_100mhz    = 0b1110000,
+    alt_out_od_100mhz = 0b1110100,
 };
 
 template<char port>
 struct Port {
-    constexpr static uint32_t base    = Periph::gpio + 0x400 * (port-'A');
+    constexpr static uint32_t base    = Periph::gpio + 0x400*(port-'A');
     constexpr static uint32_t moder   = base + 0x00;
     constexpr static uint32_t typer   = base + 0x04;
     constexpr static uint32_t ospeedr = base + 0x08;
@@ -56,24 +71,22 @@ struct Port {
     constexpr static uint32_t bsrr    = base + 0x18;
     constexpr static uint32_t afrl    = base + 0x20;
     constexpr static uint32_t afrh    = base + 0x24;
-    constexpr static uint32_t brr     = base + 0x28;
 
     static void mode (int pin, Pinmode m, int alt =0) {
         // enable GPIOx clock
-        MMIO32(Periph::rcc + 0x2C) |= 1 << (port-'A');
+        MMIO32(Periph::rcc+0x2C) |= (1<<(port-'A'));
 
-        auto mval = static_cast<int>(m);
-        MMIO32(moder) = (MMIO32(moder) & ~(3 << 2*pin))
-                      | ((mval >> 3) << 2*pin);
-        MMIO32(typer) = (MMIO32(typer) & ~(1 << pin))
-                      | (((mval >> 2) & 1) << pin);
-        MMIO32(pupdr) = (MMIO32(pupdr) & ~(3 << 2*pin))
-                      | ((mval & 3) << 2*pin);
-        MMIO32(ospeedr) = (MMIO32(ospeedr) & ~(3 << 2*pin)) | (0b11 << 2*pin);
-
+        // set the alternate mode before switching to it
         uint32_t afr = pin & 8 ? afrh : afrl;
         int shift = 4 * (pin & 7);
         MMIO32(afr) = (MMIO32(afr) & ~(0xF << shift)) | (alt << shift);
+
+        int p2 = 2*pin;
+        auto mval = static_cast<int>(m);
+        MMIO32(ospeedr) = (MMIO32(ospeedr) & ~(3<<p2)) | (((mval>>5)&3) << p2);
+        MMIO32(moder) = (MMIO32(moder) & ~(3<<p2)) | (((mval>>3)&3) << p2);
+        MMIO32(typer) = (MMIO32(typer) & ~(1<<pin)) | (((mval>>2)&1) << pin);
+        MMIO32(pupdr) = (MMIO32(pupdr) & ~(3<<p2)) | ((mval&3) << p2);
     }
 
     static void modeMap (uint16_t pins, Pinmode m, int alt =0) {
@@ -100,8 +113,6 @@ struct Pin {
     }
 
     static void write (int v) {
-        // MMIO32(v ? gpio::bsrr : gpio::brr) = mask;
-        // this is slightly faster when v is not known at compile time:
         MMIO32(gpio::bsrr) = v ? mask : mask << 16;
     }
 
@@ -147,17 +158,17 @@ struct UartDev {
             MMIO32(Periph::rcc + 0x38) |= 1 << (16+uidx); // USART 2..5
 
         MMIO32(brr) = defaultHz / 115200;  // 115200 baud @ 2.1 MHz
-        MMIO32(cr1) = 1<<3 | 1<<2 | 1<<0;  // TE, RE, UE
+        MMIO32(cr1) = (1<<3) | (1<<2) | (1<<0);  // TE, RE, UE
     }
 
     static void baud (uint32_t baud, uint32_t hz =defaultHz) {
         MMIO32(cr1) &= ~(1<<0);              // disable
         MMIO32(brr) = (hz + baud/2) / baud;  // change while disabled
-        MMIO32(cr1) |= 1<<0;                 // enable
+        MMIO32(cr1) |= (1<<0);                 // enable
     }
 
     static bool writable () {
-        return (MMIO32(isr) & 0x80) != 0;  // TXE
+        return (MMIO32(isr) & (1<<7)) != 0;  // TXE
     }
 
     static void putc (int c) {
@@ -195,6 +206,8 @@ struct UartBufDev : UartDev<TX,RX> {
     typedef UartDev<TX,RX> base;
 
     static void init () {
+        UartDev<TX,RX>::init();
+
         auto handler = []() {
             if (base::readable()) {
                 int c = base::getc();
