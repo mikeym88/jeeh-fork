@@ -40,9 +40,9 @@ uint32_t volatile ticks;
 
 void enableSysTick (uint32_t divider) {
     VTableRam().systick = []() { ++ticks; };
-    constexpr static uint32_t tick = 0xE000E000;
-    MMIO32(tick + 0x14) = divider - 1;
-    MMIO32(tick + 0x10) = 7;
+    constexpr static uint32_t tick = 0xE000E010;
+    MMIO32(tick+0x04) = MMIO32(tick+0x08) = divider - 1;
+    MMIO32(tick+0x00) = 7;
 }
 
 void wait_ms (uint32_t ms) {
