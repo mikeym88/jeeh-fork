@@ -333,3 +333,119 @@ static void powerDown () {
     __asm("cpsid i");
     __asm("wfi");
 }
+
+// analog input
+
+struct ADC {
+    constexpr static uint32_t base   = 0x40012400;
+    constexpr static uint32_t isr    = base + 0x000;
+    constexpr static uint32_t ier    = base + 0x004;
+    constexpr static uint32_t cr     = base + 0x008;
+    constexpr static uint32_t cfgr1  = base + 0x00C;
+    constexpr static uint32_t cfgr2  = base + 0x010;
+    constexpr static uint32_t smpr   = base + 0x014;
+    constexpr static uint32_t tr     = base + 0x020;
+    constexpr static uint32_t chselr = base + 0x028;
+    constexpr static uint32_t dr     = base + 0x040;
+    constexpr static uint32_t ccr    = base + 0x308;
+
+    static void init () {
+        MMIO32(Periph::rcc+0x34) |= (1<<9);  // enable ADC
+        MMIO32(cr) = (1<<31);  // ADCAL
+        while (MMIO32(cr) & (1<<31)) {}  // wait until calibration completed
+        MMIO32(cr) |= (1<<0);  // ADEN
+    }
+
+    // read analog, given a pin (which is also set to analog input mode)
+    template< typename pin >
+    static uint16_t read (pin& p) {
+        pin::mode(Pinmode::in_analog);
+        constexpr int off = pin::id < 16 ? 0 :   // A0..A7 => 0..7
+                            pin::id < 32 ? -8 :  // B0..B1 => 8..9
+                                           -22;  // C0..C5 => 10..15
+        return read(pin::id + off);
+    }
+
+    // read direct channel number (also: 17 = vref, 18 = temp)
+    static uint16_t read (uint8_t chan) {
+        MMIO32(chselr) = (1<<chan);
+        MMIO32(cr) |= (1<<2);  // start conversion
+        while (MMIO32(cr) & (1<<2)) {}  // EOC [it until done
+        return MMIO32(dr);
+    }
+
+    static void window (int low, int high) {
+        MMIO32(tr) = (high<<16) | low;
+    }
+
+    static void watch (void (*f)() =0) {
+        uint32_t cfg = MMIO32(cfgr1) & ~0x78C00000;
+        if (f != 0) {
+            VTableRam().adc_comp = f;
+            cfg |= (1<<23); // AWDEN
+
+            constexpr uint32_t nvic_en0r = 0xE000E100;
+            MMIO32(nvic_en0r) = (1<<12);  // enable ADC_COMP interrupt
+
+            MMIO32(ier) |= (1<<7); // AWDIE
+        } else
+            MMIO32(ier) &= ~(1<<7); // ~AWDIE
+
+        MMIO32(cfgr1) = cfg;
+    }
+};
+
+// analog output
+
+struct DAC {
+    constexpr static uint32_t base    = 0x40007400;
+    constexpr static uint32_t cr      = base + 0x00;
+    constexpr static uint32_t dhr12r1 = base + 0x08;
+
+    static void init () {
+        PinA<4>::mode(Pinmode::in_analog);
+        MMIO32(Periph::rcc+0x38) |= (1<<29);  // enable DAC
+        MMIO32(cr) = (1<<0);  // EN1
+    }
+
+    static void write (uint32_t val) {
+        MMIO32(dhr12r1) = val;
+    }
+
+    static void dmaWave (const uint16_t* ptr, uint16_t num, uint16_t div) {
+        MMIO32(cr) |= (1<<12) | (1<<2);  // DMAEN1, TEN1
+
+        { // DMA setup
+            const uint32_t dma    = 0x40020000;
+            const uint32_t ccr2   = dma + 0x1C;
+            const uint32_t cndtr2 = dma + 0x20;
+            const uint32_t cpar2  = dma + 0x24;
+            const uint32_t cmar2  = dma + 0x28;
+            const uint32_t cselr  = dma + 0xA8;
+
+            MMIO32(Periph::rcc+0x30) |= (1<<0);  // DMAEN
+            MMIO32(cselr) |= (9<<4);  // DAC on DMA chan 2
+            MMIO32(cndtr2) = num;
+            MMIO32(cpar2) = dhr12r1;
+            MMIO32(cmar2) = (uint32_t) ptr;
+
+            // msize 16b, psize 16b, minc, circ, m2p
+            MMIO32(ccr2) = (1<<10) | (1<<8) | (1<<7) | (1<<5) | (1<<4);
+            MMIO32(ccr2) |= (1<<0);  // EN
+        }
+
+        { // TIM6 setup
+            const uint32_t tim6 = 0x40001000;
+            const uint32_t cr1  = tim6 + 0x00;
+            const uint32_t cr2  = tim6 + 0x04;
+            const uint32_t dier = tim6 + 0x0C;
+            const uint32_t arr  = tim6 + 0x2C;
+
+            MMIO32(Periph::rcc+0x38) |= (1<<4);  // TIM6EN
+            MMIO32(arr) = div-1;
+            MMIO32(dier) = (1<<8); // UDE
+            MMIO32(cr2) = (2<<4); // MMS update
+            MMIO32(cr1) |= (1<<0); // CEN
+        }
+    }
+};
