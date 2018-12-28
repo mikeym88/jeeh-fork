@@ -403,7 +403,6 @@ struct DAC {
     constexpr static uint32_t dhr12r1 = base + 0x08;
 
     static void init () {
-        PinA<4>::mode(Pinmode::in_analog);
         MMIO32(Periph::rcc+0x38) |= (1<<29);  // enable DAC
         MMIO32(cr) = (1<<0);  // EN1
     }
