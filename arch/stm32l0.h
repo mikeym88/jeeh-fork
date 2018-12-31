@@ -1,6 +1,7 @@
 // see [1] https://jeelabs.org/ref/STM32L0x2-RM0376.pdf
 
 struct Periph {
+    constexpr static uint32_t rtc   = 0x40002800;
     constexpr static uint32_t iwdg  = 0x40003000;
     constexpr static uint32_t pwr   = 0x40007000;
     constexpr static uint32_t rcc   = 0x40021000;
@@ -370,7 +371,7 @@ struct ADC {
     static uint16_t read (uint8_t chan) {
         MMIO32(chselr) = (1<<chan);
         MMIO32(cr) |= (1<<2);  // start conversion
-        while (MMIO32(cr) & (1<<2)) {}  // EOC [it until done
+        while (MMIO32(cr) & (1<<2)) {}  // EOC wait until done
         return MMIO32(dr);
     }
 
@@ -446,5 +447,102 @@ struct DAC {
             MMIO32(cr2) = (2<<4); // MMS update
             MMIO32(cr1) |= (1<<0); // CEN
         }
+    }
+};
+
+// real-time clock
+
+struct RTC {  // [1] pp.486
+    constexpr static uint32_t tr   = Periph::rtc + 0x00;
+    constexpr static uint32_t dr   = Periph::rtc + 0x04;
+    constexpr static uint32_t cr   = Periph::rtc + 0x08;
+    constexpr static uint32_t isr  = Periph::rtc + 0x0C;
+    constexpr static uint32_t prer = Periph::rtc + 0x10;
+    constexpr static uint32_t wpr  = Periph::rtc + 0x24;
+    constexpr static uint32_t bkpr = Periph::rtc + 0x50;
+
+    struct DateTime {
+        uint32_t yr :6;  // 00..63
+        uint32_t mo :4;  // 1..12
+        uint32_t dy :5;  // 1..31
+        uint32_t hh :5;  // 0..23
+        uint32_t mm :6;  // 0..59
+        uint32_t ss :6;  // 0..59
+    };
+
+    RTC () {
+        MMIO32(Periph::rcc+0x38) |= (1<<28);  // enable PWREN
+        MMIO32(Periph::pwr) |= (1<<8);  // set DBP [1] p.481
+    }
+
+    void init () {
+        const uint32_t csr = Periph::rcc + 0x50;
+        MMIO32(csr) |= (1<<0);             // LSION
+        while ((MMIO32(csr) & (1<<1)) == 0) {}  // wait for LSIRDY
+        MMIO32(csr) = (MMIO32(csr) & ~(3<<16)) | (2<<16); // RTSEL = LSI
+        MMIO32(csr) |= (1<<18);            // RTCEN
+
+        // the LSI clock runs at (very) approximately 38 kHz
+        unlock();
+        MMIO32(prer) = (127<<16) | 296; // set prescalers for approx 38 kHz
+        relock();
+    }
+
+    DateTime get () {
+        MMIO32(wpr) = 0xCA;  // disable write protection, [1] p.803
+        MMIO32(wpr) = 0x53;
+
+        MMIO32(isr) &= ~(1<<5);              // clear RSF
+        while ((MMIO32(isr) & (1<<5)) == 0) {}   // wait for RSF
+
+        MMIO32(wpr) = 0xFF;  // re-enable write protection
+
+        // shadow registers are now valid and won't change while being read
+        uint32_t tod = MMIO32(tr);
+        uint32_t doy = MMIO32(dr);
+
+        DateTime dt;
+        dt.ss = (tod & 0xF) + 10 * ((tod>>4) & 0x7);
+        dt.mm = ((tod>>8) & 0xF) + 10 * ((tod>>12) & 0x7);
+        dt.hh = ((tod>>16) & 0xF) + 10 * ((tod>>20) & 0x3);
+        dt.dy = (doy & 0xF) + 10 * ((doy>>4) & 0x3);
+        dt.mo = ((doy>>8) & 0xF) + 10 * ((doy>>12) & 0x1);
+        // works until end 2063, will fail (i.e. roll over) in 2064 !
+        dt.yr = ((doy>>16) & 0xF) + 10 * ((doy>>20) & 0x7);
+        return dt;
+    }
+
+    void set (DateTime dt) {
+        unlock();
+        MMIO32(tr) = (dt.ss + 6 * (dt.ss/10)) |
+                    ((dt.mm + 6 * (dt.mm/10)) << 8) |
+                    ((dt.hh + 6 * (dt.hh/10)) << 16);
+        MMIO32(dr) = (dt.dy + 6 * (dt.dy/10)) |
+                    ((dt.mo + 6 * (dt.mo/10)) << 8) |
+                    ((dt.yr + 6 * (dt.yr/10)) << 16);
+        relock();
+    }
+
+    // access to the backup registers
+
+    uint32_t getData (int reg) {
+        return MMIO32(bkpr + 4 * reg);  // regs 0..4
+    }
+
+    void setData (int reg, uint32_t val) {
+        MMIO32(bkpr + 4 * reg) = val;  // regs 0..4
+    }
+
+    void unlock () {
+        MMIO32(wpr) = 0xCA;  // disable write protection
+        MMIO32(wpr) = 0x53;
+
+        MMIO32(isr) |= (1<<7);             // set INIT
+        while ((MMIO32(isr) & (1<<6)) == 0) {}  // wait for INITF
+    }
+
+    void relock () {
+        MMIO32(isr) &= ~(1<<7);             // clear INIT
+        MMIO32(wpr) = 0xFF;  // re-enable write protection
     }
 };
