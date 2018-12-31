@@ -385,7 +385,6 @@ struct CanDev {
 // real-time clock
 
 struct RTC {  // [1] pp.486
-    constexpr static uint32_t bdcr = Periph::rcc + 0x70;
     constexpr static uint32_t tr   = Periph::rtc + 0x00;
     constexpr static uint32_t dr   = Periph::rtc + 0x04;
     constexpr static uint32_t cr   = Periph::rtc + 0x08;
@@ -408,6 +407,7 @@ struct RTC {  // [1] pp.486
     }
 
     void init () {
+        const uint32_t bdcr = Periph::rcc + 0x70;
         Periph::bit(bdcr, 0) = 1;             // LSEON backup domain
         while (Periph::bit(bdcr, 1) == 0) {}  // wait for LSERDY
         Periph::bit(bdcr, 8) = 1;             // RTSEL = LSE
