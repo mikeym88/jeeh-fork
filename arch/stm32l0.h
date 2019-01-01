@@ -1,6 +1,7 @@
 // see [1] https://jeelabs.org/ref/STM32L0x2-RM0376.pdf
 
 struct Periph {
+    constexpr static uint32_t exti  = 0x40010400;
     constexpr static uint32_t rtc   = 0x40002800;
     constexpr static uint32_t iwdg  = 0x40003000;
     constexpr static uint32_t pwr   = 0x40007000;
@@ -458,6 +459,7 @@ struct RTC {  // [1] pp.486
     constexpr static uint32_t cr   = Periph::rtc + 0x08;
     constexpr static uint32_t isr  = Periph::rtc + 0x0C;
     constexpr static uint32_t prer = Periph::rtc + 0x10;
+    constexpr static uint32_t wutr = Periph::rtc + 0x14;
     constexpr static uint32_t wpr  = Periph::rtc + 0x24;
     constexpr static uint32_t bkpr = Periph::rtc + 0x50;
 
@@ -483,19 +485,17 @@ struct RTC {  // [1] pp.486
         MMIO32(csr) |= (1<<18);            // RTCEN
 
         // the LSI clock runs at (very) approximately 38 kHz
-        unlock();
-        MMIO32(prer) = (127<<16) | 296; // set prescalers for approx 38 kHz
-        relock();
+        unlockInit();
+        MMIO32(prer) = 296; // set prescalers for approx 38 kHz
+        MMIO32(prer) |= (127<<16); // needs to be written in two steps!
+        lockInit();
     }
 
     DateTime get () {
-        MMIO32(wpr) = 0xCA;  // disable write protection, [1] p.803
-        MMIO32(wpr) = 0x53;
-
+        unlock();
         MMIO32(isr) &= ~(1<<5);              // clear RSF
         while ((MMIO32(isr) & (1<<5)) == 0) {}   // wait for RSF
-
-        MMIO32(wpr) = 0xFF;  // re-enable write protection
+        lock();
 
         // shadow registers are now valid and won't change while being read
         uint32_t tod = MMIO32(tr);
@@ -513,14 +513,27 @@ struct RTC {  // [1] pp.486
     }
 
     void set (DateTime dt) {
-        unlock();
+        unlockInit();
         MMIO32(tr) = (dt.ss + 6 * (dt.ss/10)) |
                     ((dt.mm + 6 * (dt.mm/10)) << 8) |
                     ((dt.hh + 6 * (dt.hh/10)) << 16);
         MMIO32(dr) = (dt.dy + 6 * (dt.dy/10)) |
                     ((dt.mo + 6 * (dt.mo/10)) << 8) |
                     ((dt.yr + 6 * (dt.yr/10)) << 16);
-        relock();
+        lockInit();
+    }
+
+    void wakeup (int count) {
+        unlock();
+        MMIO32(cr) &= ~(1<<10); // ~WUTE
+        while ((MMIO32(isr) & (1<<2)) == 0) {} // wait for WUTWF
+        MMIO32(wutr) = count;
+        MMIO32(cr) = (1<<14) | (1<<10); // WUTIE, WUTE
+        lock();
+
+        // make sure the RTC events will wakeup while in WFE
+        MMIO32(Periph::exti+0x04) |= (1<<20); // EMR, unmask event 20
+        MMIO32(Periph::exti+0x08) |= (1<<20); // RTSR, rising edge event 20
     }
 
     // access to the backup registers
@@ -536,13 +549,20 @@ struct RTC {  // [1] pp.486
     void unlock () {
         MMIO32(wpr) = 0xCA;  // disable write protection
         MMIO32(wpr) = 0x53;
+    }
 
-        MMIO32(isr) |= (1<<7);             // set INIT
+    void lock () {
+        MMIO32(wpr) = 0xFF;  // re-enable write protection
+    }
+
+    void unlockInit () {
+        unlock();
+        MMIO32(isr) |= (1<<7); // set INIT
         while ((MMIO32(isr) & (1<<6)) == 0) {}  // wait for INITF
     }
 
-    void relock () {
-        MMIO32(isr) &= ~(1<<7);             // clear INIT
-        MMIO32(wpr) = 0xFF;  // re-enable write protection
+    void lockInit () {
+        MMIO32(isr) &= ~(1<<7); // clear INIT
+        lock();
     }
 };
