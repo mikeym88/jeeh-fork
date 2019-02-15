@@ -3,6 +3,10 @@
     "description": "Headers for framework- and platform-agnostic code",
     "version": "1.7",
     "keywords": "experimental",
+    "authors": {
+        "name": "Jean-Claude Wippler",
+        "email": "jc@wippler.nl"
+    },
     "repository": {
         "type": "git",
         "url": "https://git.jeelabs.org/jcw/jeeh.git"
