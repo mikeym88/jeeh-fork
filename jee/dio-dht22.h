@@ -35,6 +35,9 @@ struct DHT22 {
         h = (buf[0]<<8) + buf[1];
         t = (buf[2]<<8) + buf[3];
 
+        if (t < 0) // if sub-zero, convert to negative int, i.e. 2s complement
+            t = - (t & 0x7FFF);
+
         return ok;
     }
 
