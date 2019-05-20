@@ -668,3 +668,58 @@ static void powerDown () {
     __asm("cpsid i");
     __asm("wfi");
 }
+
+// timers and PWM
+
+template< int N >
+struct Timer {
+    constexpr static int tidx = N ==  1 ? 64 :  // TIM1,  APB2
+                                N ==  2 ?  0 :  // TIM2,  APB1
+                                N ==  3 ?  1 :  // TIM3,  APB1
+                                N ==  4 ?  2 :  // TIM4,  APB1
+                                N ==  5 ?  3 :  // TIM5,  APB1
+                                N ==  6 ?  4 :  // TIM6,  APB1
+                                N ==  7 ?  5 :  // TIM7,  APB1
+                                N ==  8 ? 65 :  // TIM8,  APB2
+                                N ==  9 ? 70 :  // TIM9,  APB2
+                                N == 10 ? 71 :  // TIM10, APB2
+                                N == 11 ? 72 :  // TIM11, APB2
+                                N == 12 ?  6 :  // TIM12, APB1
+                                N == 13 ?  7 :  // TIM13, APB1
+                                N == 14 ?  8 :  // TIM14, APB1
+                                          64;   // else TIM1
+
+    constexpr static uint32_t base  = 0x40000000 + 0x400*tidx;
+    constexpr static uint32_t cr1   = base + 0x00;
+//  constexpr static uint32_t cr2   = base + 0x04;
+    constexpr static uint32_t ccmr1 = base + 0x18;
+    constexpr static uint32_t ccmr2 = base + 0x1C;
+    constexpr static uint32_t ccer  = base + 0x20;
+    constexpr static uint32_t psc   = base + 0x28;
+    constexpr static uint32_t arr   = base + 0x2C;
+    constexpr static uint32_t ccr1  = base + 0x34;
+    constexpr static uint32_t ccr2  = base + 0x38;
+    constexpr static uint32_t ccr3  = base + 0x3C;
+    constexpr static uint32_t ccr4  = base + 0x40;
+
+    static void init (uint32_t limit, uint32_t scale =0) {
+        if (tidx < 64)
+            Periph::bit(Periph::rcc+0x1C, tidx) = 1;
+        else
+            Periph::bit(Periph::rcc+0x18, tidx-64) = 1;
+        MMIO16(psc) = scale;
+        MMIO32(arr) = limit-1;
+        Periph::bit(cr1, 0) = 1; // CEN
+    }
+
+    // TODO TIM1 (and TIM8?) don't seem to work with PWM
+    // TODO hard-coded for 3rd timer (to get to PB0)
+    static void pwm (uint32_t match) {
+        //MMIO32(ccmr1) = 0x60; // PWM mode
+        MMIO16(ccmr2) = 0x60; // PWM mode
+        //MMIO32(ccr1) = match;
+        MMIO32(ccr3) = match;
+        //Periph::bit(ccer, 0) = 1; // CC3E
+        Periph::bit(ccer, 8) = 1; // CC3E
+    }
+};
