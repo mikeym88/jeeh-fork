@@ -109,6 +109,10 @@ void veprintf(void (*emit)(int), char const* fmt, va_list ap) {
                     case 'd':
                         base = 10;
                         break;
+                    case 'p':
+                        fill = '0';
+                        width = 8;
+                        // fall through
                     case 'x':
                         base = 16;
                         break;
