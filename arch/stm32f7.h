@@ -293,7 +293,7 @@ RingBuffer<N> UartBufDev<TX,RX,N>::xmit;
 
 // system clock
 
-static void enableClkAt168MHz () {
+static void enableClkAt216MHz () {
     MMIO32(Periph::flash+0x00) = 0x705; // flash acr, 5 wait states
     MMIO32(Periph::rcc+0x00) = (1<<16); // HSEON
     while (Periph::bit(Periph::rcc+0x00, 17) == 0) {} // wait for HSERDY
@@ -306,8 +306,8 @@ static void enableClkAt168MHz () {
 }
 
 static int fullSpeedClock () {
-    constexpr uint32_t hz = 168000000;
-    enableClkAt168MHz();                 // using external 8 MHz crystal
+    constexpr uint32_t hz = 216000000;
+    enableClkAt216MHz();                 // using external 8 MHz crystal
     enableSysTick(hz/1000);              // systick once every 1 ms
     return hz;
 }
