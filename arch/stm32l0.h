@@ -138,6 +138,7 @@ struct UartDev {
     // TODO does not recognise alternate TX pins
     constexpr static int uidx = TX::id ==  9 ? 0 :  // PA9, USART1
                                 TX::id ==  2 ? 1 :  // PA2, USART2
+                                TX::id == 22 ? 1 :  // PB6, USART2
                                                0;   // else USART1
     constexpr static uint32_t base = uidx == 0 ? 0x40013800 :
                                                  0x40004000 + 0x400 * uidx;
