@@ -35,8 +35,8 @@ struct PCD8544 {
         // this is not needed, since the entire graphics ram will be cleared
         // in horizontal mode, writes will wrap no matter where they started
         //
-        // cmd(0x40);
-        // cmd(0x80);
+        cmd(0x40);
+        cmd(0x80);
 
         dc = 1;
         en = 0;

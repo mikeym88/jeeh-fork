@@ -19,8 +19,6 @@ struct DCF77 {
             bool decodedBit = (signal & pulseData) != 0;
             message >>= 1;
             message |= ((uint64_t) decodedBit) << 58;
-
-            printf("%c", decodedBit ? '-' : '_');
         }
                                      //  2......1.........0.........
                                      //  654321098765432109876543210
