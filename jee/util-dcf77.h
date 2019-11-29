@@ -45,7 +45,7 @@ struct DCF77 {
             }
             dow = (message >> 42) & 0x07;
             dst = (message >> 17) & 0x01;
-            return true;
+            return yr <= 99 && mo <= 12 && dy <= 31 && hh <= 23 && mm <= 59;
         }
         return false;
     }
