@@ -297,6 +297,51 @@ static int fullSpeedClock () {
     return hz;
 }
 
+// hardware spi support
+
+template< typename MO, typename MI, typename CK, typename SS, int CP =0 >
+struct SpiHw {  // [1] pp.742
+    constexpr static int sidx = MO::id ==  7 ? 0 :  // PA7,  SPI1
+                                MO::id == 21 ? 0 :  // PB5,  SPI1, remapped
+                                MO::id == 31 ? 1 :  // PB15, SPI2
+                            // oops, this is not possible, also remapped SPI1!
+                            //  MO::id == 21 ? 2 :  // PB5,  SPI3
+                            //? MO::id == 44 ? 2 :  // PC12, SPI3, remapped
+                                               0;   // else  SPI1
+    constexpr static uint32_t base = sidx == 0 ? 0x40013000 :
+                                                 0x40003400 + 0x400*sidx;
+    constexpr static uint32_t cr1 = base + 0x00;
+    constexpr static uint32_t cr2 = base + 0x04;
+    constexpr static uint32_t sr  = base + 0x08;
+    constexpr static uint32_t dr  = base + 0x0C;
+
+    static void init () {
+        SS::mode(Pinmode::out); disable();
+        CK::mode(Pinmode::alt_out);
+        MI::mode(Pinmode::alt_out);
+        MO::mode(Pinmode::alt_out);
+
+        if (sidx == 0)
+            MMIO32(Periph::rcc+0x34) |= 1<<12;  // SPI1
+        else
+            MMIO32(Periph::rcc+0x38) |= 1<<(sidx+13);  // SPI 2..3
+
+        //(void) MMIO32(sr);  // may be needed to avoid hang in some cases?
+        MMIO32(cr2) |= 1<<2;  // SSOE
+        // SPE, BR=1, MSTR, CPOL (clk/4, i.e. 8 MHz)
+        MMIO32(cr1) = (1<<6) | (1<<3) | (1<<2) | (CP<<1);  // [1] p.742
+    }
+
+    static void enable () { SS::write(0); }
+    static void disable () { SS::write(1); }
+
+    static uint8_t transfer (uint8_t v) {
+        MMIO32(dr) = v;
+        while ((MMIO32(sr) & (1<<0)) == 0) {}
+        return MMIO32(dr);
+    }
+};
+
 // independent watchdog
 
 struct Iwdg {  // [1] pp.495
