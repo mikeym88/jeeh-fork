@@ -380,15 +380,17 @@ struct Iwdg {  // [1] pp.495
 
 // low-power modes
 
-static void powerDown () {
+static void powerDown (bool standby =true) {
     MMIO32(Periph::rcc+0x38) |= (1<<28); // PWREN
-    MMIO32(Periph::pwr) |= (1<<10) | (1<<9) | (1<<1); // FWU, ULP, PDDS
+
+    // LDO range 2, FWU, ULP, DBP, CWUF, PDDS (if standby), LPSDSR
+    MMIO32(Periph::pwr) = (0b10<<11) | (1<<10) | (1<<9) | (1<<8) | (1<<2) |
+                            ((standby ? 1 : 0)<<1) | (1<<0);
 
     constexpr uint32_t scr = 0xE000ED10;
     MMIO32(scr) |= (1<<2);  // set SLEEPDEEP
 
-    __asm("cpsid i");
-    __asm("wfi");
+    asm ("wfe");
 }
 
 // analog input
@@ -581,14 +583,20 @@ struct RTC {  // [1] pp.486
     void wakeup (int count) {
         unlock();
         MMIO32(cr) &= ~(1<<10); // ~WUTE
-        while ((MMIO32(isr) & (1<<2)) == 0) {} // wait for WUTWF
-        MMIO32(wutr) = count;
-        MMIO32(cr) = (1<<14) | (1<<10); // WUTIE, WUTE
+        if (count > 0) {
+            while ((MMIO32(isr) & (1<<2)) == 0) {} // wait for WUTWF
+            MMIO32(wutr) = count;
+            MMIO32(cr) = (1<<14) | (1<<10); // WUTIE, WUTE
+        }
         lock();
 
         // make sure the RTC events will wakeup while in WFE
         MMIO32(Periph::exti+0x04) |= (1<<20); // EMR, unmask event 20
         MMIO32(Periph::exti+0x08) |= (1<<20); // RTSR, rising edge event 20
+    }
+
+    void arm () {
+        MMIO32(isr) &= ~(1<<10); // clear WUTF
     }
 
     // access to the backup registers
