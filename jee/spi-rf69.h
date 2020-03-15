@@ -207,7 +207,6 @@ int RF69<SPI>::receive (void* ptr, int len) {
 
 template< typename SPI >
 void RF69<SPI>::send (uint8_t header, const void* ptr, int len) {
-    setMode(MODE_STANDBY);
     writeReg(0x3B, 0b01011011); // automode: fifolevel + packetsent + tx
 
     SPI::enable();
