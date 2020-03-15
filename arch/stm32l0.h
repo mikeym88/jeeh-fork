@@ -272,28 +272,37 @@ RingBuffer<N> UartBufDev<TX,RX,N>::xmit;
 
 // system clock
 
-static void enableClkAt32mhz () {  // [1] p.49
+static void enableClkHSI16 () {  // [1] p.49
     constexpr uint32_t rcc_cr   = Periph::rcc + 0x00;
     constexpr uint32_t rcc_cfgr = Periph::rcc + 0x0C;
+
+    MMIO32(Periph::flash + 0x00) = 0x03; // flash acr, 1 wait, enable prefetch
 
     // switch to HSI 16 and turn everything else off
     MMIO32(rcc_cr) |= (1<<0); // turn hsi16 on
     MMIO32(rcc_cfgr) = 0x01;  // revert to hsi16, no PLL, no prescalers
     MMIO32(rcc_cr) = 0x01;    // turn off MSI, HSE, and PLL
     while ((MMIO32(rcc_cr) & (1<<25)) != 0) ; // wait for PPLRDY to clear
+}
 
-    MMIO32(Periph::flash + 0x00) = 0x03; // flash acr, 1 wait, enable prefetch
+static void enableClkPll () {
+    constexpr uint32_t rcc_cr   = Periph::rcc + 0x00;
+    constexpr uint32_t rcc_cfgr = Periph::rcc + 0x0C;
+
     MMIO32(rcc_cfgr) |= 1<<18 | 1<<22; // set PLL src HSI16, PLL x4, PLL div 2
     MMIO32(rcc_cr) |= 1<<24; // turn PLL on
     while ((MMIO32(rcc_cr) & (1<<25)) == 0) ; // wait for PPLRDY
     MMIO32(rcc_cfgr) |= 0x3; // set system clk to PLL
 }
 
-static int fullSpeedClock () {
-    constexpr uint32_t hz = 32000000;
-    enableClkAt32mhz();
-    enableSysTick(hz/1000);             // systick once every 1 ms
-    MMIO32(0x4001380C) = hz/115200;     // usart1: 115200 baud @ 32 MHz
+static int fullSpeedClock (bool pll =true) {
+    enableClkHSI16();
+    uint32_t hz = 16000000;
+    if (pll) {
+        hz = 32000000;
+        enableClkPll();
+    }
+    enableSysTick(hz/1000); // systick once every 1 ms
     return hz;
 }
 
@@ -315,7 +324,7 @@ struct SpiHw {  // [1] pp.742
     constexpr static uint32_t sr  = base + 0x08;
     constexpr static uint32_t dr  = base + 0x0C;
 
-    static void init () {
+    static void init (uint32_t div =1) {
         SS::mode(Pinmode::out); disable();
         CK::mode(Pinmode::alt_out);
         MI::mode(Pinmode::alt_out);
@@ -328,8 +337,8 @@ struct SpiHw {  // [1] pp.742
 
         //(void) MMIO32(sr);  // may be needed to avoid hang in some cases?
         MMIO32(cr2) |= 1<<2;  // SSOE
-        // SPE, BR=1, MSTR, CPOL (clk/4, i.e. 8 MHz)
-        MMIO32(cr1) = (1<<6) | (1<<3) | (1<<2) | (CP<<1);  // [1] p.742
+        // SPE, BR=dif, MSTR, CPOL (for div=1 @ 32 MHz: clk/4, i.e. 8 MHz)
+        MMIO32(cr1) = (1<<6) | (div<<3) | (1<<2) | (CP<<1);  // [1] p.742
     }
 
     static void enable () { SS::write(0); }
