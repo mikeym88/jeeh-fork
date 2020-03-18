@@ -534,16 +534,24 @@ struct RTC {  // [1] pp.486
         MMIO32(Periph::pwr) |= (1<<8);  // set DBP [1] p.481
     }
 
-    void init () {
+    void init (bool crystal =false) {
         const uint32_t csr = Periph::rcc + 0x50;
-        MMIO32(csr) |= (1<<0);             // LSION
-        while ((MMIO32(csr) & (1<<1)) == 0) {}  // wait for LSIRDY
-        MMIO32(csr) = (MMIO32(csr) & ~(3<<16)) | (2<<16); // RTSEL = LSI
-        MMIO32(csr) |= (1<<18);            // RTCEN
 
-        // the LSI clock runs at (very) approximately 38 kHz
+        if (crystal) {
+            MMIO32(csr) |= (1<<8);                  // LSEON
+            while ((MMIO32(csr) & (1<<9)) == 0) {}  // wait for LSERDY
+            MMIO32(csr) = (MMIO32(csr) & ~(3<<16)) | (1<<16); // RTSEL = LSE
+        } else {
+            MMIO32(csr) |= (1<<0);                  // LSION
+            while ((MMIO32(csr) & (1<<1)) == 0) {}  // wait for LSIRDY
+            MMIO32(csr) = (MMIO32(csr) & ~(3<<16)) | (2<<16); // RTSEL = LSI
+        }
+
+        MMIO32(csr) |= (1<<18); // RTCEN
+
+        // the LSE clock runs at 32.768 kHz
         unlockInit();
-        MMIO32(prer) = 296; // set prescalers for approx 38 kHz
+        MMIO32(prer) = crystal ? 255 : 296; // prescale for 32 or 37 kHz
         MMIO32(prer) |= (127<<16); // needs to be written in two steps!
         lockInit();
     }
