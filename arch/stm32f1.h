@@ -506,12 +506,12 @@ struct UsbDev {
 
     static bool readable () {
         poll();
-        return USB::rxNext < USB::rxFill;
+        return USB::rxBuf.avail() > 0;
     }
 
     static int getc () {
         while (!readable()) {}
-        return USB::rxBuf[USB::rxNext++];
+        return USB::rxBuf.get();
     }
 
     static void poll () {

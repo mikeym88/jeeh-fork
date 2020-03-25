@@ -215,24 +215,26 @@ static int32_t ep_write(uint8_t ep, const void *buf, uint16_t blen);
 static void usbd_process_ep0 (uint8_t event, uint8_t ep);
 
 static usbd_evt_callback  endpoint[4];
-static uint32_t ubuf [0x10];  // 64b
+static uint32_t ubuf [0x10];  // 64b XXX
 static usbd_rqc_callback complete_callback;
 static usbd_status ustat;
-static uint8_t rxBuf [CDC_DATA_SZ], rxNext, rxFill;
 static uint8_t txBuf [CDC_DATA_SZ], txFill;
 
+static RingBuffer<100> rxBuf;
+
 static void cdc_rx (uint8_t event, uint8_t ep) {
-    if (rxNext == rxFill) {
-        rxFill = ep_read(CDC_RXD_EP, rxBuf, sizeof rxBuf);
-        rxNext = 0;
+    // there is room if less than 30 of 100 slots are used
+    if (rxBuf.avail() < 30) {
+        uint8_t tmpBuf [64];
+        int n = ep_read(CDC_RXD_EP, tmpBuf, sizeof tmpBuf);
+        for (int i = 0; i < n; ++i)
+            rxBuf.put(tmpBuf[i]);
     }
 }
 
 static void cdc_tx (uint8_t event, uint8_t ep) {
-    if (txFill > 0) {
-        ep_write(CDC_TXD_EP, txBuf, txFill);
+    if (txFill > 0 && ep_write(CDC_TXD_EP, txBuf, txFill) > 0)
         txFill = 0;
-    }
 }
 
 static void usbd_init() {
