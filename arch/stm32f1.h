@@ -483,8 +483,8 @@ namespace USB {
 
 template< typename USBPIN, int USBPOL =0 >
 struct UsbDev {
-    UsbDev () {
-        fullSpeedClock();
+    static void init () {
+        //fullSpeedClock();
 
         USBPIN::mode(Pinmode::out);
         USBPIN::write(USBPOL);
