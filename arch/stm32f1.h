@@ -2,6 +2,7 @@
 // see [1] https://jeelabs.org/ref/STM32F1-RM0008.pdf
 
 namespace Periph {  // [1] p.49-50
+    constexpr static uint32_t exti  = 0x40010400;
     constexpr static uint32_t rtc   = 0x40002800;
     constexpr static uint32_t iwdg  = 0x40003000;
     constexpr static uint32_t usb   = 0x40005C00;
@@ -380,7 +381,7 @@ struct SpiHw {  // [1] pp.742
     constexpr static uint32_t sr  = base + 0x08;
     constexpr static uint32_t dr  = base + 0x0C;
 
-    static void init () {
+    static void init (uint32_t div =2) {
         SS::mode(Pinmode::out); disable();
         CK::mode(Pinmode::alt_out);
         MI::mode(Pinmode::in_float);
@@ -392,7 +393,7 @@ struct SpiHw {  // [1] pp.742
             Periph::bit(Periph::rcc+0x1C, sidx+13) = 1;  // SPI 2..3
 
         // SPE, BR=2, MSTR, CPOL (clk/8, i.e. 9 MHz)
-        MMIO32(cr1) = (1<<6) | (2<<3) | (1<<2) | (CP<<1);  // [1] p.742
+        MMIO32(cr1) = (1<<6) | (div<<3) | (1<<2) | (CP<<1);  // [1] p.742
         (void) MMIO32(sr);  // appears to be needed to avoid hang in some cases
         Periph::bit(cr2, 2) = 1;  // SSOE
     }
@@ -658,15 +659,14 @@ struct CanDev {
 
 // low-power modes
 
-static void powerDown () {
+static void powerDown (bool standby =true) {
     Periph::bit(Periph::rcc+0x1C, 28) = 1; // PWREN
-    Periph::bit(Periph::pwr, 1) = 1;  // set PDDS
+    Periph::bit(Periph::pwr, 1) = standby ? 1 : 0;  // PDDS if standby
 
     constexpr uint32_t scr = 0xE000ED10;
     MMIO32(scr) |= (1<<2);  // set SLEEPDEEP
 
-    __asm("cpsid i");
-    __asm("wfi");
+    __asm("wfe");
 }
 
 // timers and PWM
