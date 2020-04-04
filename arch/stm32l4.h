@@ -1,7 +1,8 @@
 struct Periph {
-    constexpr static uint32_t gpio  = 0x48000000;
+    constexpr static uint32_t pwr   = 0x40007000;
     constexpr static uint32_t rcc   = 0x40021000;
     constexpr static uint32_t flash = 0x40022000;
+    constexpr static uint32_t gpio  = 0x48000000;
 };
 
 // interrupt vector table in ram
@@ -277,6 +278,21 @@ static int fullSpeedClock () {
     enableSysTick(hz/1000);          // systick once every 1 ms
     MMIO32(0x40011008) = hz/115200;  // usart1: 115200 baud @ 80 MHz
     return hz;
+}
+
+// low-power modes
+
+static void powerDown (bool standby =true) {
+    MMIO32(Periph::rcc+0x58) |= (1<<28); // PWREN
+
+    // set to either shutdown or stop 1 mode
+    MMIO32(Periph::pwr+0x00) = (0b01<<9) | (standby ? 0b100 : 0b001);
+    MMIO32(Periph::pwr+0x18) = 0b11111; // clear CWUFx in PWR_SCR
+
+    constexpr uint32_t scr = 0xE000ED10;
+    MMIO32(scr) |= (1<<2);  // set SLEEPDEEP
+
+    asm ("wfe");
 }
 
 // can bus
