@@ -691,7 +691,8 @@ struct Timer {
 
     constexpr static uint32_t base  = 0x40000000 + 0x400*tidx;
     constexpr static uint32_t cr1   = base + 0x00;
-//  constexpr static uint32_t cr2   = base + 0x04;
+    constexpr static uint32_t cr2   = base + 0x04;
+    constexpr static uint32_t dier  = base + 0x0C;
     constexpr static uint32_t ccmr1 = base + 0x18;
     constexpr static uint32_t ccmr2 = base + 0x1C;
     constexpr static uint32_t ccer  = base + 0x20;
@@ -708,7 +709,9 @@ struct Timer {
         else
             Periph::bit(Periph::rcc+0x18, tidx-64) = 1;
         MMIO16(psc) = scale;
-        MMIO32(arr) = limit-1;
+        MMIO16(arr) = limit-1;
+        Periph::bit(dier, 8) = 1; // UDE
+        MMIO16(cr2) = 2<<4; // MMS = update
         Periph::bit(cr1, 0) = 1; // CEN
     }
 
