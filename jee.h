@@ -65,6 +65,8 @@ extern void wait_ms (uint32_t ms);
 #include "arch/avr328.h"
 #elif ARDUINO_ARCH_ESP32
 #include "arch/esp32.h"
+#elif ESP_PLATFORM
+#include "arch/espidf.h"
 #else
 #error no architecture defined
 #endif
