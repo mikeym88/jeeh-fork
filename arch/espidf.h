@@ -44,8 +44,12 @@ template< typename TX, typename RX >
 class UartDev {
 public:
     static bool init () { return true; }
+    static void baud (int, int =0) {}
     static bool writable () { return true; }
     static void putc (int c) { putchar((char) c); }
     static bool readable () { return true; }
     static int getc () { return getchar(); }
 };
+
+#define UartBufDev UartDev
+#define fullSpeedClock() 1

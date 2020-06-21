@@ -37,8 +37,13 @@ struct Pin {
 template< typename TX, typename RX >
 class UartDev {
 public:
+    static bool init () { return true; }
+    static void baud (int, int =0) {}
     static bool writable () { return Serial.availableForWrite(); }
     static void putc (int c) { Serial.write((char) c); }
     static bool readable () { return Serial.available(); }
     static int getc () { return Serial.read(); }
 };
+
+#define UartBufDev UartDev
+#define fullSpeedClock() 1

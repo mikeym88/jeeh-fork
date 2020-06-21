@@ -17,7 +17,7 @@ void loop () {}
 
 #endif // ARDUINO_ARCH_AVR || ARDUINO_ARCH_ESP32
 
-#if __arm__
+#if __arm__ && !ARDUINO_TEENSY40
 
 // interrupt vector table in ram
 
