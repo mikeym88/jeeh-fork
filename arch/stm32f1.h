@@ -476,6 +476,7 @@ struct Flash {
     }
 };
 
+#if USE_USB
 // usb serial console
 
 namespace USB {
@@ -522,6 +523,7 @@ struct UsbDev {
         USB::evt_poll();
     }
 };
+#endif
 
 // analog input using ADC1 or ADC2
 
