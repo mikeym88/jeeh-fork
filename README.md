@@ -1,3 +1,10 @@
+# Changes
+
+Changes from the [original repo](https://git.jeelabs.org/jcw/jeeh/commits/branch/master):
+
+* Add ADC functionality to the STM32F4 architecture, along with functions that read `vref` and the temperature
+* Move STM32F4 `enableClkAt168MHz()` and `fullSpeedClock()` functions to a `.cpp` file
+
 # JeeH
 
 Headers for framework- and platform-agnostic code.

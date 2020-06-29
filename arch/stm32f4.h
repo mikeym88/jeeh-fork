@@ -1,9 +1,25 @@
-// Hardware access for STM32F4xx family microcontrollers
+#pragma once
+// Hardware access for STM32F4 family microcontrollers
 // see [1] https://jeelabs.org/ref/STM32F4-RM0090.pdf
+// For STM32F405 datasheet
+// see [2] https://www.st.com/resource/en/datasheet/stm32f405rg.pdf
 
-#ifndef XTAL
-#define XTAL 8  // the external crystal is usually 8 MHz
-#endif
+#ifndef _STM32F4_H_
+#define _STM32F4_H_
+
+#define VREFINT_CAL_ADDR    0x1FFF7A2A                  // [2] p. 139
+#define TS_CAL1             0x1FFF7A2C                  // Temp @  30 C [2] p. 138
+#define TS_CAL2             0x1FFF7A2E                  // Temp @ 110 C [2] p. 138
+
+extern uint16_t vrefint_cal;  // read VREFINT_CAL_ADDR memory location
+extern uint16_t temp_30;
+extern uint16_t temp_110;
+
+// These values can be found in [2] p. 138
+#define AVG_SLOPE   2.5     // mV/C
+#define V_25        760.0   // 760 mV or 0.76V
+
+extern uint16_t vrefint_cal;
 
 namespace Periph {
     constexpr uint32_t rtc   = 0x40002800;
@@ -12,7 +28,6 @@ namespace Periph {
     constexpr uint32_t rcc   = 0x40023800;
     constexpr uint32_t flash = 0x40023C00;
     constexpr uint32_t fsmc  = 0xA0000000;
-    constexpr uint32_t dwt   = 0xE0001000;
 
     inline volatile uint32_t& bit (uint32_t a, int b) {
         return MMIO32(0x42000000 + ((a & 0xFFFFF) << 5) + (b << 2));
@@ -288,24 +303,93 @@ RingBuffer<N> UartBufDev<TX,RX,N>::xmit;
 
 // system clock
 
-static void enableClkAt168MHz () {
-    MMIO32(Periph::flash+0x00) = 0x705; // flash acr, 5 wait states
-    MMIO32(Periph::rcc+0x00) = (1<<16); // HSEON
-    while (Periph::bit(Periph::rcc+0x00, 17) == 0) {} // wait for HSERDY
-    MMIO32(Periph::rcc+0x08) = (4<<13) | (5<<10) | (1<<0); // prescaler w/ HSE
-    MMIO32(Periph::rcc+0x04) = (7<<24) | (1<<22) | (0<<16) | (336<<6) |
-                                (XTAL<<0);
-    Periph::bit(Periph::rcc+0x00, 24) = 1; // PLLON
-    while (Periph::bit(Periph::rcc+0x00, 25) == 0) {} // wait for PLLRDY
-    MMIO32(Periph::rcc+0x08) = (4<<13) | (5<<10) | (2<<0);
-}
+void enableClkAt168MHz();
 
-static int fullSpeedClock () {
-    constexpr uint32_t hz = 168000000;
-    enableClkAt168MHz();                 // using external 8 MHz crystal
-    enableSysTick(hz/1000);              // systick once every 1 ms
-    return hz;
-}
+int fullSpeedClock();
+
+// analog input using ADC1, ADC2, ADC3
+
+template< int N >
+struct ADC {
+    constexpr static uint32_t base = 0x40012000 + 0x100 * (N - 1);   // [1] pp. 66, 430, 432
+    constexpr static uint32_t sr = base + 0x00;
+    constexpr static uint32_t ccr = base + 0x04 + 0x300;    // [1] p. 427
+    constexpr static uint32_t cr1 = base + 0x04;
+    constexpr static uint32_t cr2 = base + 0x08;
+    constexpr static uint32_t smpr1 = base + 0x0C;
+    constexpr static uint32_t smpr2 = base + 0x10;
+    constexpr static uint32_t sqr3 = base + 0x34;
+    constexpr static uint32_t dr = base + 0x4C;
+
+    static void init(int samplingTime=0b111) {
+        // ADC is on bus APB2 ([1] p 66)
+        Periph::bit(Periph::rcc + 0x44, (N - 1) + 8) = 1;   // enable ADC 1, 2, or 3; [1] p. 187
+        // TSVREFE and ADON must be started at the same time. See [1] p. 413
+        MMIO32(ccr) = (1 << 23);                 // TSVREFE [1] p. 427
+        MMIO32(cr2) = (1 << 0);                  // ADON [1] p. 420
+        
+        // Following lines are copied over from STM32F1, but apparently no calibration needed for F4
+
+        // VSENSE is input to ADC1_IN16 for the STM23F40x and STM32F41x devices
+        // and to ADC1_IN18 for the STM32F42x and STM32F43x devices. ([1] p. 413)
+        // Sampling time ranges from 0b000 (3 cycles) to 0b111 (480 cyles)
+#if STM23F40X || STM32F41X
+        MMIO32(smpr1) = (samplingTime << 21) | (7 << 18);  // slow temp/vref conversions [1] p.420
+#elif STM32F42X || STM32F43X
+        MMIO32(smpr1) = (samplingTime << 21) | (7 << 24);  // slow temp/vref conversions [1] p.420
+#else
+#error Please specify microcontroller model. Currently supported: STM23F40X, STM32F41X, STM32F42X, STM32F43X
+#endif
+    }
+
+    // read analog, given a pin (which is also set to analog input mode)
+    template< typename pin >
+    static uint16_t read(pin& p) {
+        pin::mode(Pinmode::in_analog);
+        // See [2] pp. 49 - 50
+        constexpr int off = pin::id < 16 ? 0 :   // A0..A7 => 0..7
+                            pin::id < 32 ? -8 :  // B0..B1 => 8..9
+                                           -22;  // C0..C5 => 10..15
+        return read(pin::id + off);
+    }
+
+    // read direct channel number
+    static uint16_t read(uint8_t chan) {
+        MMIO32(sqr3) = chan;
+        Periph::bit(cr2, 30) = 1;           // Start Regular Channel conversion [1] p. 418
+                                            // TODO: do we want injected ones as well?
+        while (Periph::bit(sr, 1) == 0) {}  // EOC [1] p.415
+        return MMIO32(dr);
+    }
+
+    static double temperature()
+    {
+        if (N == 1) // temperature only available on ADC1 (TODO: source needed)
+        {
+            // For source of temperature formula, see [1] p. 413, [2] p. 138
+            // According to the reference manual, it should be:
+            //   Temperature (in *C) = {(VSENSE - V25) / Avg_Slope} + 25
+            return (((double)read(16) * vref() / 4095 - V_25) / AVG_SLOPE) + 25.00;
+        }
+        else
+        {
+            return -1.0;
+        }
+    }
+
+    static double vref()
+    {
+        if (N == 1) // vref only available on ADC1 (TODO: source needed)
+        {
+            double vrefUnscaled = vrefint_cal / (double)read(17);
+            return 3300 * vrefUnscaled; // vref
+        }
+        else
+        {
+            return -1.0;
+        }
+    }
+};
 
 // can bus(es)
 
@@ -584,13 +668,4 @@ struct Timer {
     }
 };
 
-// cycle counts, see https://stackoverflow.com/questions/11530593/
-
-struct DWT {
-    constexpr static uint32_t ctrl   = Periph::dwt + 0x0;
-    constexpr static uint32_t cyccnt = Periph::dwt + 0x4;
-
-    static void start () { MMIO32(cyccnt) = 0; MMIO32(ctrl) |= 1<<0; }
-    static void stop () { MMIO32(ctrl) &= ~(1<<0); }
-    static uint32_t count () { return MMIO32(cyccnt); }
-};
+#endif
